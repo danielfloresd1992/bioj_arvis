@@ -13,6 +13,7 @@ export default function NumericKeypad({ callbackEvent = null }){
     return(
         <div
             style={{
+                height: 'calc(100%)',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',
@@ -26,6 +27,7 @@ export default function NumericKeypad({ callbackEvent = null }){
                         <div
                             style={{
                                 width: '100%',
+                                height: '100%',
                                 display: 'flex',
                                 justifyContent: 'space-between',
                                 alignItems: 'center',
@@ -35,13 +37,25 @@ export default function NumericKeypad({ callbackEvent = null }){
                         >
                             {
                                 line.map((value, index) => (
-                                    <button
+                                    <div
                                         style={{
-                                            width: '100%'
+                                            width: '100%',
+                                            height: '100%',
+                                            borderRadius: '5px',
+                                            display: 'flex',
+                                            justifyContent: 'center',
+                                            alignItems: 'center',
+                                            backgroundColor: '#1a1919',
+                                            color: '#fff', textAlign: 'center',  fontSize: '1.8rem'
                                         }}
-                                        onClick={() => callbackEvent(value)}
-                                    >
-                                        {value}</button>
+                                        onClick={(e) => { 
+                                            console.log(e.target.textContent);
+                                                if(typeof callbackEvent === 'function') callbackEvent(e.target.textContent)
+                                            }
+                                        }
+                                    >   
+                                        {value}
+                                    </div>
                                 ))
                             }
                         </div>

@@ -11,10 +11,36 @@ import CustomDialog from './components/Dialog';
 import CustomNumerPad from './components/keypad';
 import {CustomInputNumeric} from './components/InputCustom'
 
+
+
 function App() {
 
 
-  return (
+    const [dnsState, setDniState] = useState('')
+
+
+    const handdlerGetDni = value => {
+        let currentValue = dnsState;
+        if(value === '') return
+        else if(value === '⌫') {
+            const dniArr = dnsState.split('')
+            dniArr.pop()
+            currentValue = dniArr.join('')
+        }
+        else if(value === '⏎') submitData();
+        else currentValue = currentValue  + value
+        setDniState(currentValue);
+    };
+
+
+
+    const submitData = () => {
+        alert('envio de data')
+    };
+
+
+
+    return (
         <div
             style={{
                 position: 'absolute',
@@ -34,15 +60,16 @@ function App() {
             >   
                 <div
                     style={{
-                        width: '30%',
+                        width: '40%',
+                        height: '100%',
                         padding: '.5rem',
                         display: 'flex',
                         gap: '1rem',
                         flexDirection: 'column'
                     }}
                 >
-                    <CustomInputNumeric />
-                    <CustomNumerPad />
+                    <CustomInputNumeric value={dnsState} />
+                    <CustomNumerPad callbackEvent={handdlerGetDni} />
                 </div>
             </div>
             {/*

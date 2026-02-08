@@ -10,7 +10,7 @@ export function CustomInputNumeric({ value }){
         <div 
             style={{
                 width:'100%',
-                height: '40px',
+                height: '45px',
                 display:'flex',
                 backgroundColor: '#fff',
                 borderRadius: '5px',
@@ -29,7 +29,8 @@ export function CustomInputNumeric({ value }){
                     border: 'none',
                     width: '100%',
                     height: '100%',
-                    padding: '.5rem'
+                    padding: '.5rem',
+                    fontSize: '1.2rem'
                 }} 
                 value={value} type='text'/>
             </div>
