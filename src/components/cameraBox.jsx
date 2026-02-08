@@ -1,5 +1,6 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import {  isMobile } from 'react-device-detect';
 import { base64ToFile } from '../libs/file';
 
 export default forwardRef(function CameraBox({}, ref) {
@@ -7,12 +8,14 @@ export default forwardRef(function CameraBox({}, ref) {
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
 
+
+
      useEffect(() => {
-        if(videoRef.current) streamingCameraLive(); 
+        if( isMobile && videoRef.current) streamingCameraLive(); 
     }, []);
 
 
-
+    
 
     const streamingCameraLive = async () => { 
         try { 

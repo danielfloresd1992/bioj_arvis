@@ -49,7 +49,6 @@ export default function NumericKeypad({ callbackEvent = null }){
                                             color: '#fff', textAlign: 'center',  fontSize: '2rem'
                                         }}
                                         onClick={(e) => { 
-                                            console.log(e.target.textContent);
                                                 if(typeof callbackEvent === 'function') callbackEvent(e.target.textContent)
                                             }
                                         }

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, use } from 'react';
 import reactLogo from './assets/react.svg';
 import viteLogo from '/vite.svg';
 import './App.css';
@@ -12,39 +12,123 @@ import CustomNumerPad from './components/keypad';
 import {CustomInputNumeric} from './components/InputCustom'
 import DateComponent from './components/date';
 import CameraBox from './components/cameraBox';
+import ShowData from './components/Section_data_user';
+
+
+
+//RESOURCE NETWORK
+import { userIsExist } from './network/user';
+
 
 function App() {
 
 
-    const [dnsState, setDniState] = useState('');
+    const [dniState, setDniState] = useState('');
+    const [ userResultState, setResultUserState ] = useState(null);
     const cameraRef = useRef(null);
-
+    const dialogRef = useRef(null);
     const imageCameraRef = useRef(null);
 
 
+
+
     const handdlerGetDni = value => {
-        let currentValue = dnsState;
+        let currentValue = dniState;
         if(value === '') return
-        else if(value === '⌫') {
-            const dniArr = dnsState.split('')
+        else if(value === '⌫' || value === 'Backspace') {
+            const dniArr = dniState.split('')
             dniArr.pop()
             currentValue = dniArr.join('')
         }
-        else if(value === '⏎') submitData();
+        else if(value === '⏎' || value === 'Enter') submitData();
+        else if(value.length > 1) {}
         else currentValue = currentValue  + value
         setDniState(currentValue);
     };
 
 
 
-    const submitData = useCallback(() => {
-        cameraRef.current.getImage((image) => {
-       
-            imageCameraRef.current.src = image.base64;
+    const submitData = useCallback(async () => {
+        if(dniState === '') return null;
+        userIsExist(dniState, (error, response) => {
+            if(error){
+                if(error?.status === 404){
+                    dialogRef.current.openDialog('Error en la busqueda', 'error', returnNotFound())
+                }
+     
+             
+            }
+            else{
+                setResultUserState(response.data.result);
+                cameraRef.current.getImage((image) => {
+                    imageCameraRef.current.src = image.base64;
+                    imageCameraRef.current.src = '/white_bg.png'
+                });
+                dialogRef.current.openDialog('Usuario registrado', 'Autenticado', returnUsersuccessful())
+                
+            }
         });
-        
+
     }, [cameraRef.current]);
 
+
+
+    const returnNotFound = () => {
+
+        return(
+            <div
+                style={{
+
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    flexDirection: 'column',
+                    gap: '.5rem'
+                }}
+            >       
+                <img style={{
+                        width: '80px'
+                    }} 
+                    src='/icons8-usuario-no-encontrado-50.png' alt='user not found-ico'
+                />
+                <p style={{ fontSize: '1.5rem' }}>Usuario no encontrado o CI invalida</p>
+            </div>
+        );
+    };
+    
+
+
+
+    const returnUsersuccessful = () => {
+        return(
+            <div
+                style={{
+
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    flexDirection: 'column',
+                    gap: '.5rem'
+                }}
+            >       
+                <img 
+                    style={{
+                        width: '80px'
+                    }} 
+                    src='/icons8-evento-96.png' 
+                    alt='user not found-ico'
+                />
+                <p style={{ fontSize: '1.5rem' }}>¡Usuario autenticado con exito!</p>
+            </div>
+        );
+    };
+
+
+
+    const resetLogin = () => {
+        setDniState('');
+        setResultUserState(null);
+    };  
 
 
     return (
@@ -78,9 +162,9 @@ function App() {
                         flexDirection: 'column'
                     }}
                 >   
-                    <DateComponent />
-                    <CustomInputNumeric labelText='CI: ' value={dnsState} placeholder='Cédula de usuario' />
-                    <CustomNumerPad callbackEvent={handdlerGetDni} />
+                    <DateComponent user={userResultState} />
+                    <CustomInputNumeric labelText='CI: ' value={dniState} placeholder='Cédula de usuario' changeEvent={handdlerGetDni} />
+                    <CustomNumerPad callbackEvent={handdlerGetDni}  />
                 </div>
 
                 <div style={{
@@ -91,21 +175,37 @@ function App() {
                     gap: '0.5rem'
                 }}>
                     <CameraBox ref={cameraRef} />
+                    <div style={{
+                        width: '100%',
+                        height: '50%',
+                        display: 'flex',
+                        gap: '.5rem'
+                    }}>
+                        <img 
+                            style={{
+                                width: '50%',
+                                height: '100%',
+                                display: 'flex',
+                                flexDirection: 'row'
 
-                    <img 
-                        style={{
-                            width: '50%',
-                            height: '50%'
-                        }} 
-                        src='' 
-                        alt='camera-result' 
-                        ref={imageCameraRef} 
-                    />
+                            }} 
+                            src='/white_bg.png' 
+                            alt='camera-result' 
+                            ref={imageCameraRef} 
+                        />
+                        <div style={{
+                                width: '50%',
+                                height: '100%'
+                            }} >
+                            <ShowData user={userResultState} />
+                        </div>
+                    </div>
                 </div>
             </div>
-            
+            <CustomDialog ref={dialogRef} callback={resetLogin} />
         </div>
-    )
+    );
 }
+
 
 export default App

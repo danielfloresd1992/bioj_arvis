@@ -1,9 +1,8 @@
+import { isDesktop } from 'react-device-detect';
 
 
 
-
-
-export function CustomInputNumeric({ labelText = '', value= '' , placeholder=''}){
+export function CustomInputNumeric({ labelText = '', value= '' , placeholder='', changeEvent=()=>{}}){
 
 
     return(
@@ -34,16 +33,24 @@ export function CustomInputNumeric({ labelText = '', value= '' , placeholder=''}
                 }}
             >
                 <input style={{
-                    backgroundColor: '#ffffff00',
-                    color: '#000',
-                    border: 'none',
-                    width: '100%',
-                    height: '100%',
-                    padding: '.5rem',
-                    fontSize: '1.4rem'
-                }} 
-                placeholder={placeholder}
-                value={value} type='text'/>
+                        backgroundColor: '#ffffff00',
+                        color: '#000',
+                        border: 'none',
+                        width: '100%',
+                        height: '100%',
+                        padding: '.5rem',
+                        fontSize: '1.4rem'
+                    }} 
+                    placeholder={placeholder}
+                    value={value} type='text'
+                    onKeyDown={(e) => {
+                        if(isDesktop){
+                            changeEvent(e.key);
+                        }
+                    }}
+                 
+                />
+                
             </div>
             <div style={{
                 height: '100%',
