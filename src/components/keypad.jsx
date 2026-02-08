@@ -45,8 +45,8 @@ export default function NumericKeypad({ callbackEvent = null }){
                                             display: 'flex',
                                             justifyContent: 'center',
                                             alignItems: 'center',
-                                            backgroundColor: '#1a1919',
-                                            color: '#fff', textAlign: 'center',  fontSize: '1.8rem'
+                                            backgroundColor: '#333333',
+                                            color: '#fff', textAlign: 'center',  fontSize: '2rem'
                                         }}
                                         onClick={(e) => { 
                                             console.log(e.target.textContent);

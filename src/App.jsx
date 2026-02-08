@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import reactLogo from './assets/react.svg';
 import viteLogo from '/vite.svg';
 import './App.css';
@@ -10,13 +10,16 @@ import CustonHeader from './components/Header';
 import CustomDialog from './components/Dialog';
 import CustomNumerPad from './components/keypad';
 import {CustomInputNumeric} from './components/InputCustom'
-
-
+import DateComponent from './components/date';
+import CameraBox from './components/cameraBox';
 
 function App() {
 
 
-    const [dnsState, setDniState] = useState('')
+    const [dnsState, setDniState] = useState('');
+    const cameraRef = useRef(null);
+
+    const imageCameraRef = useRef(null);
 
 
     const handdlerGetDni = value => {
@@ -34,9 +37,13 @@ function App() {
 
 
 
-    const submitData = () => {
-        alert('envio de data')
-    };
+    const submitData = useCallback(() => {
+        cameraRef.current.getImage((image) => {
+       
+            imageCameraRef.current.src = image.base64;
+        });
+        
+    }, [cameraRef.current]);
 
 
 
@@ -48,6 +55,7 @@ function App() {
                 height: '100%',
                 display: 'flex',
                 flexDirection: 'column'
+                
             }}
         >
             <CustonHeader />
@@ -55,29 +63,47 @@ function App() {
                 style={{
                     width: '100%',
                     height: 'calc(100% - 100px)',
-                    backgroundColor: '#00000000'
+                    backgroundColor: '#00000000',
+                    padding: '.8rem',
+                    display: 'flex',
+                    gap: '.5rem'
                 }}
             >   
                 <div
                     style={{
                         width: '40%',
                         height: '100%',
-                        padding: '.5rem',
                         display: 'flex',
-                        gap: '1rem',
+                        gap: '.5rem',
                         flexDirection: 'column'
                     }}
-                >
-                    <CustomInputNumeric value={dnsState} />
+                >   
+                    <DateComponent />
+                    <CustomInputNumeric labelText='CI: ' value={dnsState} placeholder='Cédula de usuario' />
                     <CustomNumerPad callbackEvent={handdlerGetDni} />
                 </div>
+
+                <div style={{
+                    width: '60%',
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.5rem'
+                }}>
+                    <CameraBox ref={cameraRef} />
+
+                    <img 
+                        style={{
+                            width: '50%',
+                            height: '50%'
+                        }} 
+                        src='' 
+                        alt='camera-result' 
+                        ref={imageCameraRef} 
+                    />
+                </div>
             </div>
-            {/*
-                <CustomDialog title='Hola Enrique 🚀' />
-
-            */}
-
-
+            
         </div>
     )
 }

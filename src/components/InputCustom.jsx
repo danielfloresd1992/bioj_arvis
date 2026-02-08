@@ -3,20 +3,30 @@
 
 
 
-export function CustomInputNumeric({ value }){
+export function CustomInputNumeric({ labelText = '', value= '' , placeholder=''}){
 
 
     return(
         <div 
             style={{
                 width:'100%',
-                height: '45px',
+                height: '70px',
                 display:'flex',
+                alignItems: 'center',
                 backgroundColor: '#fff',
                 borderRadius: '5px',
                 overflow: 'hidden'
             }}
         >
+            <p
+                style={{
+                    color: '#424242',
+                    fontSize: '1.1rem',
+                    fontWeight: "bolder",
+                    padding: '0 0.2rem'
+                }}
+            >{labelText}</p>
+            
             <div 
                 style={{
                     width: 'calc(100% - 40px)',
@@ -30,12 +40,14 @@ export function CustomInputNumeric({ value }){
                     width: '100%',
                     height: '100%',
                     padding: '.5rem',
-                    fontSize: '1.2rem'
+                    fontSize: '1.4rem'
                 }} 
+                placeholder={placeholder}
                 value={value} type='text'/>
             </div>
             <div style={{
-                width: '40px',
+                height: '100%',
+                width: '70px',
                 backgroundColor: '#2c2c2c',
                 display: 'flex',
                 justifyContent: 'center', 
