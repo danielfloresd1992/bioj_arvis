@@ -1,5 +1,4 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
-import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import {  isMobile } from 'react-device-detect';
 import { base64ToFile } from '../libs/file';
 
@@ -45,6 +44,7 @@ export default forwardRef(function CameraBox({}, ref) {
             fileReader.readAsDataURL(file);
             const loadData = e => {
                 const result = e.target.result;
+           
                 callback({base64: result, file});
                 fileReader.removeEventListener('load', loadData);
             };
@@ -56,19 +56,6 @@ export default forwardRef(function CameraBox({}, ref) {
 
 
     
-    const getImageFromCamera = async () => {
-        const photo = await Camera.getPhoto({ 
-            quality: 90, 
-            allowEditing: false, 
-            resultType: CameraResultType.Base64, // 👈 obtenemos la foto en base64
-            source: CameraSource.Camera, 
-            direction: 'front' // 👈 cámara frontal 
-        });
-
-        const file = base64ToFile(photo.base64String);
-        return { file, base64: photo.base64String }
-    };
-
 
 
     useImperativeHandle(ref, () => ({

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, use } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import reactLogo from './assets/react.svg';
 import viteLogo from '/vite.svg';
 import './App.css';
@@ -20,6 +20,7 @@ import ShowData from './components/Section_data_user';
 import { userIsExist } from './network/user';
 
 
+
 function App() {
 
 
@@ -28,6 +29,7 @@ function App() {
     const cameraRef = useRef(null);
     const dialogRef = useRef(null);
     const imageCameraRef = useRef(null);
+
 
 
 
@@ -51,6 +53,8 @@ function App() {
     const submitData = useCallback(async () => {
         if(dniState === '') return null;
         userIsExist(dniState, (error, response) => {
+            console.log(error);
+            console.log(response);
             if(error){
                 if(error?.status === 404){
                     dialogRef.current.openDialog('Error en la busqueda', 'error', returnNotFound())
@@ -59,12 +63,19 @@ function App() {
              
             }
             else{
-                setResultUserState(response.data.result);
-                cameraRef.current.getImage((image) => {
-                    imageCameraRef.current.src = image.base64;
-                    imageCameraRef.current.src = '/white_bg.png'
-                });
-                dialogRef.current.openDialog('Usuario registrado', 'Autenticado', returnUsersuccessful())
+                console.log(response);
+                if(response?.status === 404) {
+                    dialogRef.current.openDialog('Error en la busqueda', 'error', returnNotFound())
+                }
+                else{
+                    setResultUserState(response.data.result);
+                    cameraRef.current.getImage((image) => {
+
+                        imageCameraRef.current.src = image.base64;
+                        imageCameraRef.current.style.display = 'block';
+                    });
+                    dialogRef.current.openDialog('Usuario registrado', 'Autenticado', returnUsersuccessful())
+                }
                 
             }
         });
@@ -91,7 +102,7 @@ function App() {
                     }} 
                     src='/icons8-usuario-no-encontrado-50.png' alt='user not found-ico'
                 />
-                <p style={{ fontSize: '1.5rem' }}>Usuario no encontrado o CI invalida</p>
+                <p style={{ fontSize: '1.5rem' }}>Usuario no encontrado o CI inválida</p>
             </div>
         );
     };
@@ -175,24 +186,33 @@ function App() {
                     gap: '0.5rem'
                 }}>
                     <CameraBox ref={cameraRef} />
+
                     <div style={{
                         width: '100%',
                         height: '50%',
                         display: 'flex',
-                        gap: '.5rem'
+                        gap: '.5rem',
+                        border: '1px solid #000'
                     }}>
-                        <img 
-                            style={{
-                                width: '50%',
-                                height: '100%',
-                                display: 'flex',
-                                flexDirection: 'row'
-
-                            }} 
-                            src='/white_bg.png' 
-                            alt='camera-result' 
-                            ref={imageCameraRef} 
-                        />
+                        <div style={{
+                            width: '50%',
+                            height: '100%',
+                            display: 'flex',
+                                flexDirection: 'row',
+                        }}>
+                            <img 
+                                style={{
+                                    width: '100%',
+                                    height: '100%',
+                                    display: 'none'
+                                }} 
+                                src='/white_bg.png' 
+                                alt='camera-result' 
+                                ref={imageCameraRef} 
+                                
+                            />
+                        </div>
+                        
                         <div style={{
                                 width: '50%',
                                 height: '100%'

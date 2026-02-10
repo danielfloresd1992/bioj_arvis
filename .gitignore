@@ -9,10 +9,12 @@ lerna-debug.log*
 android
 node_modules
 dist
-
+android
+mobile
 dist-ssr
 *.local
-
+server.key
+server.crt
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
