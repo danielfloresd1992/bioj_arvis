@@ -12,3 +12,16 @@ export async function userIsExist(dni = '', callback = () => { }) {
         callback(error?.response);
     }
 }
+
+
+
+export async function save(dni, body){
+    if(!dni) return null;
+    try {
+        const response = await axios.post(`https://amazona365.ddns.net:3006/api_jarvis/v1/user/attendanc/${dni}`, );
+        console.log(response);
+    } 
+    catch (error) {
+        console.log(error)
+    }
+}

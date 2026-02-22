@@ -20,6 +20,10 @@ import ShowData from './components/Section_data_user';
 import { userIsExist } from './network/user';
 
 
+//UI EXPERIENCES
+import { sucessAudio } from './libs/audio_content';
+
+
 
 function App() {
 
@@ -74,7 +78,8 @@ function App() {
                         imageCameraRef.current.src = image.base64;
                         imageCameraRef.current.style.display = 'block';
                     });
-                    dialogRef.current.openDialog('Usuario registrado', 'Autenticado', returnUsersuccessful())
+                    dialogRef.current.openDialog('Usuario registrado', 'Autenticado', returnUsersuccessful());
+                    sucessAudio();
                 }
                 
             }

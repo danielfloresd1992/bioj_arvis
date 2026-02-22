@@ -41,6 +41,7 @@ export function CustomInputNumeric({ labelText = '', value= '' , placeholder='',
                         padding: '.5rem',
                         fontSize: '1.4rem'
                     }} 
+                    onFocus={e => e.target.blur()}
                     placeholder={placeholder}
                     value={value} type='text'
                     onKeyDown={(e) => {
