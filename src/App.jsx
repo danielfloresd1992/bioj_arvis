@@ -5,11 +5,12 @@ import './App.css';
 import Button from "@mui/material/Button";
 
 
+
 //COMPONENTS 
 import CustonHeader from './components/Header';
 import CustomDialog from './components/Dialog';
 import CustomNumerPad from './components/keypad';
-import {CustomInputNumeric} from './components/InputCustom'
+import { CustomInputNumeric } from './components/InputCustom'
 import DateComponent from './components/date';
 import CameraBox from './components/cameraBox';
 import ShowData from './components/Section_data_user';
@@ -17,8 +18,8 @@ import ShowData from './components/Section_data_user';
 
 
 //RESOURCE NETWORK
-import { userIsExist } from './network/user';
-
+import { userIsExistAttendance } from './network/user';
+import { sendImage } from './network/multimedia';
 
 //UI EXPERIENCES
 import { sucessAudio } from './libs/audio_content';
@@ -29,7 +30,7 @@ function App() {
 
 
     const [dniState, setDniState] = useState('');
-    const [ userResultState, setResultUserState ] = useState(null);
+    const [userResultState, setResultUserState] = useState(null);
     const cameraRef = useRef(null);
     const dialogRef = useRef(null);
     const imageCameraRef = useRef(null);
@@ -40,49 +41,59 @@ function App() {
 
     const handdlerGetDni = value => {
         let currentValue = dniState;
-        if(value === '') return
-        else if(value === '⌫' || value === 'Backspace') {
+        if (value === '') return
+        else if (value === '⌫' || value === 'Backspace') {
             const dniArr = dniState.split('')
             dniArr.pop()
             currentValue = dniArr.join('')
         }
-        else if(value === '⏎' || value === 'Enter') submitData();
-        else if(value.length > 1) {}
-        else currentValue = currentValue  + value
+        else if (value === '⏎' || value === 'Enter') submitData();
+        else if (value.length > 1) { }
+        else currentValue = currentValue + value
         setDniState(currentValue);
     };
 
 
 
     const submitData = useCallback(async () => {
-        if(dniState === '') return null;
-        userIsExist(dniState, (error, response) => {
-            console.log(error);
-            console.log(response);
-            if(error){
-                if(error?.status === 404){
-                    dialogRef.current.openDialog('Error en la busqueda', 'error', returnNotFound())
-                }
-     
-             
-            }
-            else{
-                console.log(response);
-                if(response?.status === 404) {
-                    dialogRef.current.openDialog('Error en la busqueda', 'error', returnNotFound())
-                }
-                else{
-                    setResultUserState(response.data.result);
-                    cameraRef.current.getImage((image) => {
+        if (dniState === '') return null;
 
-                        imageCameraRef.current.src = image.base64;
-                        imageCameraRef.current.style.display = 'block';
-                    });
-                    dialogRef.current.openDialog('Usuario registrado', 'Autenticado', returnUsersuccessful());
-                    sucessAudio();
-                }
+
+        cameraRef.current.getImage(async (image) => {
+
+            imageCameraRef.current.src = image.base64;
+            imageCameraRef.current.style.display = 'block';
+
+            const responseMultimedia = await sendImage(image.file);
+
+            
+            userIsExistAttendance(dniState, responseMultimedia.url, (error, response) => {
                 
-            }
+                
+                
+                
+                if (error) {
+                    if (error?.status === 404) {
+                        dialogRef.current.openDialog('Error en la busqueda', 'error', returnNotFound())
+                    }
+                    
+                    
+                }
+                else {
+                    console.log(response);
+                    if (response?.status === 404) {
+                        dialogRef.current.openDialog('Error en la busqueda', 'error', returnNotFound())
+                    }
+                    else {
+                        setResultUserState(response.data.user);
+
+                        dialogRef.current.openDialog('Usuario registrado', 'Autenticado', returnUsersuccessful(response.data.message));
+                        sucessAudio();
+                        
+                    }
+
+                }
+            });
         });
 
     }, [cameraRef.current]);
@@ -91,7 +102,7 @@ function App() {
 
     const returnNotFound = () => {
 
-        return(
+        return (
             <div
                 style={{
 
@@ -101,22 +112,22 @@ function App() {
                     flexDirection: 'column',
                     gap: '.5rem'
                 }}
-            >       
+            >
                 <img style={{
-                        width: '80px'
-                    }} 
+                    width: '80px'
+                }}
                     src='/icons8-usuario-no-encontrado-50.png' alt='user not found-ico'
                 />
                 <p style={{ fontSize: '1.5rem' }}>Usuario no encontrado o CI inválida</p>
             </div>
         );
     };
-    
 
 
 
-    const returnUsersuccessful = () => {
-        return(
+
+    const returnUsersuccessful = (text) => {
+        return (
             <div
                 style={{
 
@@ -126,15 +137,15 @@ function App() {
                     flexDirection: 'column',
                     gap: '.5rem'
                 }}
-            >       
-                <img 
+            >
+                <img
                     style={{
                         width: '80px'
-                    }} 
-                    src='/icons8-evento-96.png' 
+                    }}
+                    src='/icons8-evento-96.png'
                     alt='user not found-ico'
                 />
-                <p style={{ fontSize: '1.5rem' }}>¡Usuario autenticado con exito!</p>
+                <p style={{ fontSize: '1.5rem' }}>{text}</p>
             </div>
         );
     };
@@ -144,7 +155,10 @@ function App() {
     const resetLogin = () => {
         setDniState('');
         setResultUserState(null);
-    };  
+        imageCameraRef.current.src = '';
+        imageCameraRef.current.style.display = 'none';
+
+    };
 
 
     return (
@@ -155,11 +169,11 @@ function App() {
                 height: '100%',
                 display: 'flex',
                 flexDirection: 'column'
-                
+
             }}
         >
             <CustonHeader />
-            <div 
+            <div
                 style={{
                     width: '100%',
                     height: 'calc(100% - 100px)',
@@ -168,7 +182,7 @@ function App() {
                     display: 'flex',
                     gap: '.5rem'
                 }}
-            >   
+            >
                 <div
                     style={{
                         width: '40%',
@@ -177,10 +191,10 @@ function App() {
                         gap: '.5rem',
                         flexDirection: 'column'
                     }}
-                >   
+                >
                     <DateComponent user={userResultState} />
                     <CustomInputNumeric labelText='CI: ' value={dniState} placeholder='Cédula de usuario' changeEvent={handdlerGetDni} />
-                    <CustomNumerPad callbackEvent={handdlerGetDni}  />
+                    <CustomNumerPad callbackEvent={handdlerGetDni} />
                 </div>
 
                 <div style={{
@@ -203,25 +217,25 @@ function App() {
                             width: '50%',
                             height: '100%',
                             display: 'flex',
-                                flexDirection: 'row',
+                            flexDirection: 'row',
                         }}>
-                            <img 
+                            <img
                                 style={{
                                     width: '100%',
                                     height: '100%',
                                     display: 'none'
-                                }} 
-                                src='/white_bg.png' 
-                                alt='camera-result' 
-                                ref={imageCameraRef} 
-                                
+                                }}
+                                src='/white_bg.png'
+                                alt='camera-result'
+                                ref={imageCameraRef}
+
                             />
                         </div>
-                        
+
                         <div style={{
-                                width: '50%',
-                                height: '100%'
-                            }} >
+                            width: '50%',
+                            height: '100%'
+                        }} >
                             <ShowData user={userResultState} />
                         </div>
                     </div>
