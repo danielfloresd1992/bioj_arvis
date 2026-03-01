@@ -74,20 +74,52 @@ function App() {
                 
                 if (error) {
                     if (error?.status === 404) {
-                        dialogRef.current.openDialog('Error en la busqueda', 'error', returnNotFound())
+                        dialogRef.current.openDialog('Usuario no encontrado', 'error', returnNotFound())
                     }
-                    
-                    
+                    else if (error?.status === 400) {
+                        dialogRef.current.openDialog(
+                            'Solicitud inválida',
+                            'warning',
+                            returnApiMessage(error?.data?.message || 'Los datos enviados no son válidos.')
+                        )
+                    }
+                    else if (error?.status === 409) {
+                        dialogRef.current.openDialog(
+                            'Registro duplicado',
+                            'warning',
+                            returnAttendanceConflict(error?.data?.message || 'La jornada de hoy ya fue cerrada previamente para este usuario.')
+                        )
+                    }
+                    else {
+                        dialogRef.current.openDialog(
+                            'Error inesperado',
+                            'error',
+                            returnApiMessage(error?.data?.message || 'Ocurrió un error inesperado en el servidor.')
+                        )
+                    }
                 }
                 else {
-                    console.log(response);
                     if (response?.status === 404) {
-                        dialogRef.current.openDialog('Error en la busqueda', 'error', returnNotFound())
+                        dialogRef.current.openDialog('Usuario no encontrado', 'error', returnNotFound())
+                    }
+                    else if (response?.status === 400) {
+                        dialogRef.current.openDialog(
+                            'Solicitud inválida',
+                            'warning',
+                            returnApiMessage(response?.data?.message || 'Los datos enviados no son válidos.')
+                        )
+                    }
+                    else if (response?.status === 409) {
+                        dialogRef.current.openDialog(
+                            'Registro duplicado',
+                            'warning',
+                            returnAttendanceConflict(response?.data?.message || 'La jornada de hoy ya fue cerrada previamente para este usuario.')
+                        )
                     }
                     else {
                         setResultUserState(response.data.user);
 
-                        dialogRef.current.openDialog('Usuario registrado', 'Autenticado', returnUsersuccessful(response.data.message));
+                        dialogRef.current.openDialog('Usuario registrado', 'success', returnUsersuccessful(response.data.message));
                         sucessAudio();
                         
                     }
@@ -150,6 +182,52 @@ function App() {
         );
     };
 
+
+    const returnAttendanceConflict = (text) => {
+        return (
+            <div
+                style={{
+
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    flexDirection: 'column',
+                    gap: '.5rem'
+                }}
+            >
+                <img
+                    style={{
+                        width: '80px'
+                    }}
+                    src='/icons8-evento-96.png'
+                    alt='attendance-conflict-ico'
+                />
+                <p style={{ fontSize: '1.5rem', textAlign: 'center' }}>{text}</p>
+            </div>
+        );
+    };
+
+
+    const returnApiMessage = (text, iconSrc = '/icons8-error-50.png') => {
+        return (
+            <div
+                style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    flexDirection: 'column',
+                    gap: '.5rem'
+                }}
+            >
+                <img
+                    style={{ width: '80px' }}
+                    src={iconSrc}
+                    alt='api-message-ico'
+                />
+                <p style={{ fontSize: '1.5rem', textAlign: 'center' }}>{text}</p>
+            </div>
+        );
+    };
 
 
     const resetLogin = () => {
