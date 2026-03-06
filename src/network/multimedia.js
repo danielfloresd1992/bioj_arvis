@@ -11,7 +11,7 @@ export async function sendImage(file){
         const formData = new FormData();
         formData.append('img', file);
 
-        const result = await axios.post('https://amazona365.ddns.net:3006/api_jarvis/v1/multimedia', formData);
+        const result = await axios.post('https://amazona365.ddns.net/api_jarvis/v1/multimedia', formData);
         return result.data
     } 
     catch (error) {
