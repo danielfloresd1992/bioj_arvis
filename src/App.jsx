@@ -21,8 +21,8 @@ import { sucessAudio } from './libs/audio_content';
 // FACE RECOGNITION
 import { loadModels, isReady, getDescriptor, saveDescriptor, detectFace } from './libs/faceRecognition';
 
-const IDLE_TIMEOUT = 2 * 60 * 1000; // 5 minutes
-const FACE_SCAN_INTERVAL = 1500; // escanear rostro cada 1.5s (TinyFaceDetector ~20-50ms por frame)
+const IDLE_TIMEOUT = 3 * 60 * 1000; // 3 minutos
+const FACE_SCAN_INTERVAL = 500; // escanear rostro cada 0.5s (TinyFaceDetector ~20-50ms por frame)
 
 function App() {
 
