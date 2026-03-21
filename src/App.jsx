@@ -1,328 +1,218 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import reactLogo from './assets/react.svg';
-import viteLogo from '/vite.svg';
 import './App.css';
-import Button from "@mui/material/Button";
 
-
-
-//COMPONENTS 
+// COMPONENTS
 import CustonHeader from './components/Header';
 import CustomDialog from './components/Dialog';
 import CustomNumerPad from './components/keypad';
-import { CustomInputNumeric } from './components/InputCustom'
+import { CustomInputNumeric } from './components/InputCustom';
 import DateComponent from './components/date';
 import CameraBox from './components/cameraBox';
 import ShowData from './components/Section_data_user';
+import ScreenSaver from './components/ScreenSaver';
 
-
-
-//RESOURCE NETWORK
+// NETWORK
 import { userIsExistAttendance } from './network/user';
 import { sendImage } from './network/multimedia';
 
-//UI EXPERIENCES
+// UI
 import { sucessAudio } from './libs/audio_content';
 
-
+const IDLE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
 function App() {
-
-
     const [dniState, setDniState] = useState('');
     const [userResultState, setResultUserState] = useState(null);
+    const [cameraActive, setCameraActive] = useState(false);
+    const [showScreenSaver, setShowScreenSaver] = useState(true);
+
     const cameraRef = useRef(null);
     const dialogRef = useRef(null);
     const imageCameraRef = useRef(null);
+    const idleTimerRef = useRef(null);
 
+    const resetIdleTimer = useCallback(() => {
+        setShowScreenSaver(false);
+        setCameraActive(true);
 
+        if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = setTimeout(() => {
+            setCameraActive(false);
+            setShowScreenSaver(true);
+            if (cameraRef.current) cameraRef.current.stopCamera();
+        }, IDLE_TIMEOUT);
+    }, []);
 
+    useEffect(() => {
+        return () => {
+            if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+        };
+    }, []);
 
+    const handdlerGetDni = useCallback((value) => {
+        resetIdleTimer();
 
-    const handdlerGetDni = value => {
         let currentValue = dniState;
-        if (value === '') return
+        if (value === '') return;
         else if (value === '⌫' || value === 'Backspace') {
-            const dniArr = dniState.split('')
-            dniArr.pop()
-            currentValue = dniArr.join('')
+            const dniArr = dniState.split('');
+            dniArr.pop();
+            currentValue = dniArr.join('');
         }
-        else if (value === '⏎' || value === 'Enter') submitData();
+        else if (value === '⏎' || value === 'Enter' || value === 'Entrar') submitData();
         else if (value.length > 1) { }
-        else currentValue = currentValue + value
+        else currentValue = currentValue + value;
         setDniState(currentValue);
-    };
-
-
+    }, [dniState]);
 
     const submitData = useCallback(async () => {
         if (dniState === '') return null;
 
+        if (!cameraRef.current) return;
 
         cameraRef.current.getImage(async (image) => {
-
-            imageCameraRef.current.src = image.base64;
-            imageCameraRef.current.style.display = 'block';
+            if (imageCameraRef.current) {
+                imageCameraRef.current.src = image.base64;
+                imageCameraRef.current.style.display = 'block';
+            }
 
             const responseMultimedia = await sendImage(image.file);
 
-            
             userIsExistAttendance(dniState, responseMultimedia.url, (error, response) => {
-                
-                
-                
-                
                 if (error) {
                     if (error?.status === 404) {
-                        dialogRef.current.openDialog('Usuario no encontrado', 'error', returnNotFound())
-                    }
-                    else if (error?.status === 400) {
+                        dialogRef.current.openDialog('Usuario no encontrado', 'error', returnNotFound());
+                    } else if (error?.status === 400) {
                         dialogRef.current.openDialog(
-                            'Solicitud inválida',
-                            'warning',
+                            'Solicitud inválida', 'warning',
                             returnApiMessage(error?.data?.message || 'Los datos enviados no son válidos.')
-                        )
-                    }
-                    else if (error?.status === 409) {
+                        );
+                    } else if (error?.status === 409) {
                         dialogRef.current.openDialog(
-                            'Registro duplicado',
-                            'warning',
+                            'Registro duplicado', 'warning',
                             returnAttendanceConflict(error?.data?.message || 'La jornada de hoy ya fue cerrada previamente para este usuario.')
-                        )
-                    }
-                    else {
+                        );
+                    } else {
                         dialogRef.current.openDialog(
-                            'Error inesperado',
-                            'error',
+                            'Error inesperado', 'error',
                             returnApiMessage(error?.data?.message || 'Ocurrió un error inesperado en el servidor.')
-                        )
+                        );
                     }
-                }
-                else {
+                } else {
                     if (response?.status === 404) {
-                        dialogRef.current.openDialog('Usuario no encontrado', 'error', returnNotFound())
-                    }
-                    else if (response?.status === 400) {
+                        dialogRef.current.openDialog('Usuario no encontrado', 'error', returnNotFound());
+                    } else if (response?.status === 400) {
                         dialogRef.current.openDialog(
-                            'Solicitud inválida',
-                            'warning',
+                            'Solicitud inválida', 'warning',
                             returnApiMessage(response?.data?.message || 'Los datos enviados no son válidos.')
-                        )
-                    }
-                    else if (response?.status === 409) {
+                        );
+                    } else if (response?.status === 409) {
                         dialogRef.current.openDialog(
-                            'Registro duplicado',
-                            'warning',
+                            'Registro duplicado', 'warning',
                             returnAttendanceConflict(response?.data?.message || 'La jornada de hoy ya fue cerrada previamente para este usuario.')
-                        )
-                    }
-                    else {
+                        );
+                    } else {
                         setResultUserState(response.data.user);
-
                         dialogRef.current.openDialog('Usuario registrado', 'success', returnUsersuccessful(response.data.message));
                         sucessAudio();
-                        
                     }
-
                 }
             });
         });
+    }, [dniState]);
 
-    }, [cameraRef.current]);
+    const returnNotFound = () => (
+        <div className="flex flex-col items-center gap-3">
+            <img className="w-16" src="/icons8-usuario-no-encontrado-50.png" alt="not-found" />
+            <p className="text-lg text-slate-300 text-center">Usuario no encontrado o CI inválida</p>
+        </div>
+    );
 
+    const returnUsersuccessful = (text) => (
+        <div className="flex flex-col items-center gap-3">
+            <img className="w-16" src="/icons8-evento-96.png" alt="success" />
+            <p className="text-lg text-emerald-300 text-center">{text}</p>
+        </div>
+    );
 
+    const returnAttendanceConflict = (text) => (
+        <div className="flex flex-col items-center gap-3">
+            <img className="w-16" src="/icons8-evento-96.png" alt="conflict" />
+            <p className="text-lg text-amber-300 text-center">{text}</p>
+        </div>
+    );
 
-    const returnNotFound = () => {
-
-        return (
-            <div
-                style={{
-
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    flexDirection: 'column',
-                    gap: '.5rem'
-                }}
-            >
-                <img style={{
-                    width: '80px'
-                }}
-                    src='/icons8-usuario-no-encontrado-50.png' alt='user not found-ico'
-                />
-                <p style={{ fontSize: '1.5rem' }}>Usuario no encontrado o CI inválida</p>
-            </div>
-        );
-    };
-
-
-
-
-    const returnUsersuccessful = (text) => {
-        return (
-            <div
-                style={{
-
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    flexDirection: 'column',
-                    gap: '.5rem'
-                }}
-            >
-                <img
-                    style={{
-                        width: '80px'
-                    }}
-                    src='/icons8-evento-96.png'
-                    alt='user not found-ico'
-                />
-                <p style={{ fontSize: '1.5rem' }}>{text}</p>
-            </div>
-        );
-    };
-
-
-    const returnAttendanceConflict = (text) => {
-        return (
-            <div
-                style={{
-
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    flexDirection: 'column',
-                    gap: '.5rem'
-                }}
-            >
-                <img
-                    style={{
-                        width: '80px'
-                    }}
-                    src='/icons8-evento-96.png'
-                    alt='attendance-conflict-ico'
-                />
-                <p style={{ fontSize: '1.5rem', textAlign: 'center' }}>{text}</p>
-            </div>
-        );
-    };
-
-
-    const returnApiMessage = (text, iconSrc = '/icons8-error-50.png') => {
-        return (
-            <div
-                style={{
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    flexDirection: 'column',
-                    gap: '.5rem'
-                }}
-            >
-                <img
-                    style={{ width: '80px' }}
-                    src={iconSrc}
-                    alt='api-message-ico'
-                />
-                <p style={{ fontSize: '1.5rem', textAlign: 'center' }}>{text}</p>
-            </div>
-        );
-    };
-
+    const returnApiMessage = (text, iconSrc = '/icons8-error-50.png') => (
+        <div className="flex flex-col items-center gap-3">
+            <img className="w-16" src={iconSrc} alt="message" />
+            <p className="text-lg text-slate-300 text-center">{text}</p>
+        </div>
+    );
 
     const resetLogin = () => {
         setDniState('');
         setResultUserState(null);
-        imageCameraRef.current.src = '';
-        imageCameraRef.current.style.display = 'none';
-
+        if (imageCameraRef.current) {
+            imageCameraRef.current.src = '';
+            imageCameraRef.current.style.display = 'none';
+        }
     };
 
-
     return (
-        <div
-            style={{
-                position: 'absolute',
-                width: '100%',
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column'
-
-            }}
-        >
+        <div className="w-full h-full flex flex-col bg-[#0b0f14]">
             <CustonHeader />
-            <div
-                style={{
-                    width: '100%',
-                    height: 'calc(100% - 100px)',
-                    backgroundColor: '#00000000',
-                    padding: '.8rem',
-                    display: 'flex',
-                    gap: '.5rem'
-                }}
-            >
-                <div
-                    style={{
-                        width: '40%',
-                        height: '100%',
-                        display: 'flex',
-                        gap: '.5rem',
-                        flexDirection: 'column'
-                    }}
-                >
-                    <DateComponent user={userResultState} />
-                    <CustomInputNumeric labelText='CI: ' value={dniState} placeholder='Cédula de usuario' changeEvent={handdlerGetDni} />
+
+            <div className="flex-1 min-h-0 flex gap-3 p-3" style={{ padding: '.5rem .5rem .5rem .5rem' }}>
+                {/* Left Panel - Controls */}
+                <div className="w-[38%] h-full flex flex-col gap-3 shrink-0">
+                    <DateComponent />
+                    <CustomInputNumeric
+                        labelText="CI:"
+                        value={dniState}
+                        placeholder="Cédula de usuario"
+                        changeEvent={handdlerGetDni}
+                    />
                     <CustomNumerPad callbackEvent={handdlerGetDni} />
                 </div>
 
-                <div style={{
-                    width: '60%',
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.5rem'
-                }}>
-                    <CameraBox ref={cameraRef} />
+                {/* Right Panel - Camera & Result */}
+                <div className="flex-1 h-full flex flex-col gap-3 min-w-0">
+                    {/* Camera area with screensaver overlay */}
+                    <div className="relative flex-1 min-h-0">
+                        <CameraBox ref={cameraRef} isActive={cameraActive} />
+                        <ScreenSaver visible={showScreenSaver} />
+                    </div>
 
-                    <div style={{
-                        width: '100%',
-                        height: '50%',
-                        display: 'flex',
-                        gap: '.5rem',
-                        border: '1px solid #000'
-                    }}>
-                        <div style={{
-                            width: '50%',
-                            height: '100%',
-                            display: 'flex',
-                            flexDirection: 'row',
-                        }}>
+                    {/* Result area */}
+                    <div className="h-[45%] shrink-0 flex gap-3 bg-[#111827] rounded-2xl border border-slate-800/50 overflow-hidden">
+                        <div className="w-1/2 h-full flex items-center justify-center bg-[#0d1117] p-2">
                             <img
-                                style={{
-                                    width: '100%',
-                                    height: '100%',
-                                    display: 'none'
-                                }}
-                                src='/white_bg.png'
-                                alt='camera-result'
+                                className="max-w-full max-h-full object-contain rounded-lg hidden"
+                                src=""
+                                alt="camera-result"
                                 ref={imageCameraRef}
-
                             />
+                            {!userResultState && (
+                                <div className="flex flex-col items-center gap-2 text-slate-600">
+                                    <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+                                    </svg>
+                                    <p className="text-xs">Captura pendiente</p>
+                                </div>
+                            )}
                         </div>
 
-                        <div style={{
-                            width: '50%',
-                            height: '100%'
-                        }} >
+                        <div className="w-1/2 h-full">
                             <ShowData user={userResultState} />
                         </div>
                     </div>
                 </div>
             </div>
+
             <CustomDialog ref={dialogRef} callback={resetLogin} />
         </div>
     );
 }
 
-
-export default App
+export default App;

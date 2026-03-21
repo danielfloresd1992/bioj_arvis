@@ -1,87 +1,56 @@
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
-const mounths = [
-  'enero',
-  'febrero',
-  'marzo',
-  'abril',
-  'mayo',
-  'junio',
-  'julio',
-  'agosto',
-  'septiembre',
-  'octubre',
-  'noviembre',
-  'diciembre'
+const months = [
+    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
 ];
 
-
-const dayWeek = [
-  'domingo',
-  'lunes',
-  'martes',
-  'miércoles',
-  'jueves',
-  'viernes',
-  'sábado'
+const dayNames = [
+    'domingo', 'lunes', 'martes', 'miércoles',
+    'jueves', 'viernes', 'sábado'
 ];
 
-
-
-export default function DateComponent(){
-
-
+export default function DateComponent() {
     const hourRef = useRef(null);
     const dateRef = useRef(null);
 
-
     useEffect(() => {
-
-
-
         const interval = setInterval(() => {
-            const datenow = new Date();
-            let day = datenow.getDay(); // devuelve número de 0 a 6 
-            const date = datenow.getDate();
-            const mount = datenow.getMonth();
-            const year = datenow.getFullYear ()
+            const now = new Date();
+            const dayName = dayNames[now.getDay()];
+            const date = now.getDate();
+            const month = months[now.getMonth()];
+            const year = now.getFullYear();
 
-            let seconds = `0${datenow.getSeconds()}`
-            let minutes =`0${datenow.getMinutes()}`;
-            let hours = `0${datenow.getHours()}`;
-            if(date.length > 2) date.slice(1);
-            if(hours.length > 2) hours = hours.slice(1); 
-            if(minutes.length > 2) minutes = minutes.slice(1); 
-            if(seconds.length > 2) seconds = seconds.slice(1); 
-       
-            if(dateRef.current) dateRef.current.textContent =`${dayWeek[day]} ${date} de ${mounths[mount]} del ${year}`;
-            if(hourRef.current) hourRef.current.textContent = `${hours}:${minutes}:${seconds}`;
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
 
+            if (dateRef.current) {
+                dateRef.current.textContent = `${dayName} ${date} de ${month} del ${year}`;
+            }
+            if (hourRef.current) {
+                hourRef.current.textContent = `${hours}:${minutes}:${seconds}`;
+            }
         }, 1000);
 
-        () => {
-            clearImmediate(interval);
-        }
+        return () => clearInterval(interval);
     }, []);
 
-
-    return(
-        <div style={{
-            width: '100%'
-        }}>
-            <div ref={dateRef}
-                style={{
-                    fontSize: '1.2rem',
-                    color: '#333333'
-                }}
-            >Nov Thurs 2011</div>
-            <div ref={hourRef}
-                style={{
-                    fontSize: '1.7rem',
-                    color: '#4f4f4f',
-                    fontWeight: 500,
-                }}
-            >00:00:00</div>
+    return (
+        <div className="w-full shrink-0">
+            <p
+                ref={dateRef}
+                className="text-center text-sm text-slate-400 capitalize"
+            >
+                ---
+            </p>
+            <p
+                ref={hourRef}
+                className="text-center text-3xl font-mono font-bold text-emerald-400 tracking-wider"
+            >
+                00:00:00
+            </p>
         </div>
-    )
+    );
 }
