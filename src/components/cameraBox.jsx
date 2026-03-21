@@ -26,7 +26,7 @@ export default forwardRef(function CameraBox({ isActive = false, faceDetection =
         }
     };
 
-    
+
     const stopCamera = () => {
         if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => track.stop());
@@ -42,7 +42,7 @@ export default forwardRef(function CameraBox({ isActive = false, faceDetection =
         if (isActive && !streamRef.current) {
             startCamera();
         }
-        else{
+        else {
             stopCamera();
         }
     }, [isActive]);
@@ -77,7 +77,7 @@ export default forwardRef(function CameraBox({ isActive = false, faceDetection =
         const bh = box.height * overlay.height;
 
         const isRecognized = match !== null;
-        const color = isRecognized ? '#10b981' : '#64748b';
+        const color = isRecognized ? '#10b981' : '#FF0000';
 
         // Dibujar cuadro del rostro
         ctx.strokeStyle = color;

@@ -21,7 +21,7 @@ import { sucessAudio } from './libs/audio_content';
 // FACE RECOGNITION
 import { loadModels, isReady, getDescriptor, saveDescriptor, detectFace } from './libs/faceRecognition';
 
-const IDLE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+const IDLE_TIMEOUT = 2 * 60 * 1000; // 5 minutes
 const FACE_SCAN_INTERVAL = 1500; // escanear rostro cada 1.5s (TinyFaceDetector ~20-50ms por frame)
 
 function App() {
@@ -70,7 +70,7 @@ function App() {
     }, []);
 
 
-    
+
     // Escaneo periódico de rostro mientras la cámara esté activa
     useEffect(() => {
         if (cameraActive && modelsReady) {
@@ -220,7 +220,7 @@ function App() {
     );
 
 
-    
+
     const returnUsersuccessful = (text) => (
         <div className="flex flex-col items-center gap-3">
             <img className="w-16" src="/icons8-evento-96.png" alt="success" />
