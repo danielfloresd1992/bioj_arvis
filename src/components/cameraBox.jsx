@@ -1,9 +1,10 @@
-import { useEffect, useRef, forwardRef, useImperativeHandle, useState } from 'react';
+import { useEffect, useRef, forwardRef, useImperativeHandle, useState, useCallback } from 'react';
 
-export default forwardRef(function CameraBox({ isActive = false }, ref) {
+export default forwardRef(function CameraBox({ isActive = false, faceDetection = null }, ref) {
 
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
+    const overlayRef = useRef(null);
     const streamRef = useRef(null);
     const [cameraOn, setCameraOn] = useState(false);
 
@@ -45,6 +46,116 @@ export default forwardRef(function CameraBox({ isActive = false }, ref) {
         return () => stopCamera();
     }, []);
 
+    // ── Dibujar overlay de detección facial ──
+    const drawOverlay = useCallback(() => {
+        const overlay = overlayRef.current;
+        const video = videoRef.current;
+        if (!overlay || !video) return;
+
+        const container = overlay.parentElement;
+        if (!container) return;
+
+        overlay.width = container.clientWidth;
+        overlay.height = container.clientHeight;
+
+        const ctx = overlay.getContext('2d');
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+        if (!faceDetection) return;
+
+        const { box, match } = faceDetection;
+
+        // Convertir coordenadas normalizadas (0-1) a píxeles del overlay
+        const bx = box.x * overlay.width;
+        const by = box.y * overlay.height;
+        const bw = box.width * overlay.width;
+        const bh = box.height * overlay.height;
+
+        const isRecognized = match !== null;
+        const color = isRecognized ? '#10b981' : '#64748b';
+
+        // Dibujar cuadro del rostro
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 8;
+        ctx.strokeRect(bx, by, bw, bh);
+        ctx.shadowBlur = 0;
+
+        // Esquinas decorativas
+        const cornerLen = Math.min(bw, bh) * 0.2;
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = color;
+
+        // Superior izquierda
+        ctx.beginPath();
+        ctx.moveTo(bx, by + cornerLen);
+        ctx.lineTo(bx, by);
+        ctx.lineTo(bx + cornerLen, by);
+        ctx.stroke();
+
+        // Superior derecha
+        ctx.beginPath();
+        ctx.moveTo(bx + bw - cornerLen, by);
+        ctx.lineTo(bx + bw, by);
+        ctx.lineTo(bx + bw, by + cornerLen);
+        ctx.stroke();
+
+        // Inferior izquierda
+        ctx.beginPath();
+        ctx.moveTo(bx, by + bh - cornerLen);
+        ctx.lineTo(bx, by + bh);
+        ctx.lineTo(bx + cornerLen, by + bh);
+        ctx.stroke();
+
+        // Inferior derecha
+        ctx.beginPath();
+        ctx.moveTo(bx + bw - cornerLen, by + bh);
+        ctx.lineTo(bx + bw, by + bh);
+        ctx.lineTo(bx + bw, by + bh - cornerLen);
+        ctx.stroke();
+
+        // Etiqueta con nombre/estado
+        const fontSize = Math.max(12, Math.min(overlay.height * 0.035, 18));
+        ctx.font = `600 ${fontSize}px system-ui, sans-serif`;
+
+        let label;
+        if (isRecognized) {
+            const pct = Math.round(match.confidence * 100);
+            label = `CI: ${match.dni}  (${pct}%)`;
+        } else {
+            label = 'Rostro no reconocido';
+        }
+
+        const textMetrics = ctx.measureText(label);
+        const padding = 6;
+        const labelH = fontSize + padding * 2;
+        const labelW = textMetrics.width + padding * 2;
+        const labelX = bx;
+        const labelY = by - labelH - 4;
+
+        // Fondo de la etiqueta
+        ctx.fillStyle = isRecognized ? 'rgba(16, 185, 129, 0.85)' : 'rgba(30, 41, 59, 0.85)';
+        ctx.beginPath();
+        ctx.roundRect(labelX, labelY, labelW, labelH, 6);
+        ctx.fill();
+
+        // Texto
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(label, labelX + padding, labelY + padding + fontSize * 0.85);
+    }, [faceDetection]);
+
+    useEffect(() => {
+        drawOverlay();
+    }, [faceDetection, drawOverlay]);
+
+    // Redibujar al redimensionar
+    useEffect(() => {
+        const handleResize = () => drawOverlay();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [drawOverlay]);
+
     const getImageFileAnd64 = async (callback) => {
         if (!streamRef.current) await startCamera();
         const video = videoRef.current;
@@ -67,7 +178,9 @@ export default forwardRef(function CameraBox({ isActive = false }, ref) {
     useImperativeHandle(ref, () => ({
         getImage: getImageFileAnd64,
         startCamera,
-        stopCamera
+        stopCamera,
+        getVideoElement: () => videoRef.current,
+        getCanvasElement: () => canvasRef.current
     }));
 
     return (
@@ -80,6 +193,12 @@ export default forwardRef(function CameraBox({ isActive = false }, ref) {
                 className={`w-full h-full object-cover transition-opacity duration-500 ${cameraOn ? 'opacity-100' : 'opacity-0'}`}
             />
             <canvas ref={canvasRef} width={640} height={480} className="hidden" />
+
+            {/* Overlay de detección facial */}
+            <canvas
+                ref={overlayRef}
+                className="absolute inset-0 w-full h-full pointer-events-none"
+            />
 
             {!cameraOn && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">

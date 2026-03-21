@@ -1,8 +1,11 @@
 export default function ShowData({ user = null }) {
 
-    const changeDns = (dns) => {
-        if (!dns) return null;
-        return 'https://amazona365.ddns.net' + dns.split('https://72.68.60.254')[1];
+    const changeDns = (url) => {
+        if (!url) return null;
+        if (url.includes('72.68.60.254')) {
+            return url.replace('https://72.68.60.254', 'https://amazona365.ddns.net');
+        }
+        return url;
     };
 
     if (!user) {

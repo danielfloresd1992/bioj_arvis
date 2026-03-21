@@ -18,7 +18,11 @@ import { sendImage } from './network/multimedia';
 // UI
 import { sucessAudio } from './libs/audio_content';
 
+// FACE RECOGNITION
+import { loadModels, isReady, getDescriptor, saveDescriptor, detectFace } from './libs/faceRecognition';
+
 const IDLE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+const FACE_SCAN_INTERVAL = 2000; // escanear rostro cada 2s
 
 function App() {
     const [dniState, setDniState] = useState('');
@@ -26,10 +30,14 @@ function App() {
     const [cameraActive, setCameraActive] = useState(false);
     const [showScreenSaver, setShowScreenSaver] = useState(true);
 
+    const [faceSuggestion, setFaceSuggestion] = useState(null); // { dni, confidence }
+    const [faceDetection, setFaceDetection] = useState(null); // { box, match }
+    const [cameraImageSrc, setCameraImageSrc] = useState('');
+
     const cameraRef = useRef(null);
     const dialogRef = useRef(null);
-    const imageCameraRef = useRef(null);
     const idleTimerRef = useRef(null);
+    const faceScanRef = useRef(null);
 
     const resetIdleTimer = useCallback(() => {
         setShowScreenSaver(false);
@@ -39,9 +47,51 @@ function App() {
         idleTimerRef.current = setTimeout(() => {
             setCameraActive(false);
             setShowScreenSaver(true);
+            setResultUserState(null);
+            setCameraImageSrc('');
+            setDniState('');
             if (cameraRef.current) cameraRef.current.stopCamera();
         }, IDLE_TIMEOUT);
     }, []);
+
+    // Cargar modelos de reconocimiento facial al inicio
+    useEffect(() => {
+        loadModels().catch(err => console.error('[FaceRecognition] Error cargando modelos:', err));
+    }, []);
+
+    // Escaneo periódico de rostro mientras la cámara esté activa
+    useEffect(() => {
+        if (cameraActive && isReady()) {
+            faceScanRef.current = setInterval(async () => {
+                const video = cameraRef.current?.getVideoElement();
+                if (!video || video.readyState < 2) return;
+
+                const result = await detectFace(video);
+
+                if (result) {
+                    setFaceDetection({ box: result.box, match: result.match });
+
+                    if (result.match && dniState === '') {
+                        setFaceSuggestion(result.match);
+                    } else if (!result.match) {
+                        setFaceSuggestion(null);
+                    }
+                } else {
+                    setFaceDetection(null);
+                    setFaceSuggestion(null);
+                }
+            }, FACE_SCAN_INTERVAL);
+        }
+
+        return () => {
+            if (faceScanRef.current) {
+                clearInterval(faceScanRef.current);
+                faceScanRef.current = null;
+            }
+            setFaceSuggestion(null);
+            setFaceDetection(null);
+        };
+    }, [cameraActive, dniState]);
 
     useEffect(() => {
         return () => {
@@ -51,6 +101,12 @@ function App() {
 
     const handdlerGetDni = useCallback((value) => {
         resetIdleTimer();
+
+        // Limpiar datos del registro anterior al empezar a escribir
+        if (userResultState) {
+            setResultUserState(null);
+            setCameraImageSrc('');
+        }
 
         let currentValue = dniState;
         if (value === '') return;
@@ -71,10 +127,7 @@ function App() {
         if (!cameraRef.current) return;
 
         cameraRef.current.getImage(async (image) => {
-            if (imageCameraRef.current) {
-                imageCameraRef.current.src = image.base64;
-                imageCameraRef.current.style.display = 'block';
-            }
+            setCameraImageSrc(image.base64);
 
             const responseMultimedia = await sendImage(image.file);
 
@@ -113,8 +166,22 @@ function App() {
                         );
                     } else {
                         setResultUserState(response.data.user);
-                        dialogRef.current.openDialog('Usuario registrado', 'success', returnUsersuccessful(response.data.message));
+                        dialogRef.current.openDialog(
+                            'Usuario registrado', 'success',
+                            returnUsersuccessful(response.data.message),
+                            () => setDniState('')
+                        );
                         sucessAudio();
+
+                        // Aprendizaje facial: guardar descriptor asociado a esta cédula
+                        if (isReady()) {
+                            const video = cameraRef.current?.getVideoElement();
+                            if (video) {
+                                getDescriptor(video).then(desc => {
+                                    if (desc) saveDescriptor(dniState, desc);
+                                });
+                            }
+                        }
                     }
                 }
             });
@@ -152,10 +219,7 @@ function App() {
     const resetLogin = () => {
         setDniState('');
         setResultUserState(null);
-        if (imageCameraRef.current) {
-            imageCameraRef.current.src = '';
-            imageCameraRef.current.style.display = 'none';
-        }
+        setCameraImageSrc('');
     };
 
     return (
@@ -172,6 +236,26 @@ function App() {
                         placeholder="Cédula de usuario"
                         changeEvent={handdlerGetDni}
                     />
+                    {faceSuggestion && dniState === '' && (
+                        <button
+                            onClick={() => {
+                                setDniState(faceSuggestion.dni);
+                                setFaceSuggestion(null);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl
+                                       bg-emerald-900/30 border border-emerald-500/40
+                                       text-emerald-300 text-sm
+                                       hover:bg-emerald-900/50 transition-colors cursor-pointer"
+                        >
+                            <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" />
+                            </svg>
+                            <span>
+                                Rostro detectado: <strong>{faceSuggestion.dni}</strong>
+                                <span className="ml-1 opacity-60">({Math.round(faceSuggestion.confidence * 100)}%)</span>
+                            </span>
+                        </button>
+                    )}
                     <CustomNumerPad callbackEvent={handdlerGetDni} />
                 </div>
 
@@ -179,20 +263,20 @@ function App() {
                 <div className="flex-1 h-full flex flex-col gap-3 min-w-0">
                     {/* Camera area with screensaver overlay */}
                     <div className="relative flex-1 min-h-0">
-                        <CameraBox ref={cameraRef} isActive={cameraActive} />
+                        <CameraBox ref={cameraRef} isActive={cameraActive} faceDetection={faceDetection} />
                         <ScreenSaver visible={showScreenSaver} />
                     </div>
 
                     {/* Result area */}
                     <div className="h-[45%] shrink-0 flex gap-3 bg-[#111827] rounded-2xl border border-slate-800/50 overflow-hidden">
                         <div className="w-1/2 h-full flex items-center justify-center bg-[#0d1117] p-2">
-                            <img
-                                className="max-w-full max-h-full object-contain rounded-lg hidden"
-                                src=""
-                                alt="camera-result"
-                                ref={imageCameraRef}
-                            />
-                            {!userResultState && (
+                            {userResultState ? (
+                                <img
+                                    className="max-w-full max-h-full object-contain rounded-lg"
+                                    src={cameraImageSrc}
+                                    alt="camera-result"
+                                />
+                            ) : (
                                 <div className="flex flex-col items-center gap-2 text-slate-600">
                                     <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />

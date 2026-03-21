@@ -21,14 +21,21 @@ const DIALOG_STYLES = {
 export default forwardRef(function CustomDialog({ callback = () => {} }, ref) {
 
     const [state, setState] = useState({ open: false, title: '', description: null, typeMessage: 'error' });
+    const [onCloseCallback, setOnCloseCallback] = useState(null);
 
     const closeDialog = () => {
         setState({ open: false, title: '', description: null, typeMessage: 'error' });
-        callback();
+        if (onCloseCallback) {
+            onCloseCallback();
+            setOnCloseCallback(null);
+        } else {
+            callback();
+        }
     };
 
-    const openDialog = (title = '', type = 'error', description = null) => {
+    const openDialog = (title = '', type = 'error', description = null, closeCallback = null) => {
         setState({ open: true, title, typeMessage: type, description });
+        setOnCloseCallback(() => closeCallback);
     };
 
     useImperativeHandle(ref, () => ({ closeDialog, openDialog }));
