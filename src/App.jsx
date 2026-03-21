@@ -22,9 +22,11 @@ import { sucessAudio } from './libs/audio_content';
 import { loadModels, isReady, getDescriptor, saveDescriptor, detectFace } from './libs/faceRecognition';
 
 const IDLE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
-const FACE_SCAN_INTERVAL = 2000; // escanear rostro cada 2s
+const FACE_SCAN_INTERVAL = 1500; // escanear rostro cada 1.5s (el Worker libera el main thread)
 
 function App() {
+
+
     const [dniState, setDniState] = useState('');
     const [userResultState, setResultUserState] = useState(null);
     const [cameraActive, setCameraActive] = useState(false);
@@ -34,10 +36,13 @@ function App() {
     const [faceDetection, setFaceDetection] = useState(null); // { box, match }
     const [cameraImageSrc, setCameraImageSrc] = useState('');
 
+    const [modelsReady, setModelsReady] = useState(false);
+
     const cameraRef = useRef(null);
     const dialogRef = useRef(null);
     const idleTimerRef = useRef(null);
     const faceScanRef = useRef(null);
+    const isProcessingRef = useRef(false);
 
     const resetIdleTimer = useCallback(() => {
         setShowScreenSaver(false);
@@ -54,31 +59,40 @@ function App() {
         }, IDLE_TIMEOUT);
     }, []);
 
-    // Cargar modelos de reconocimiento facial al inicio
+    // Cargar modelos de reconocimiento facial al inicio (en Web Worker)
     useEffect(() => {
-        loadModels().catch(err => console.error('[FaceRecognition] Error cargando modelos:', err));
+        loadModels()
+            .then(() => setModelsReady(true))
+            .catch(err => console.error('[FaceRecognition] Error cargando modelos:', err));
     }, []);
 
     // Escaneo periódico de rostro mientras la cámara esté activa
     useEffect(() => {
-        if (cameraActive && isReady()) {
+        if (cameraActive && modelsReady) {
             faceScanRef.current = setInterval(async () => {
+                // Lock: evitar que detecciones se acumulen si el Worker tarda
+                if (isProcessingRef.current) return;
                 const video = cameraRef.current?.getVideoElement();
                 if (!video || video.readyState < 2) return;
 
-                const result = await detectFace(video);
+                isProcessingRef.current = true;
+                try {
+                    const result = await detectFace(video);
 
-                if (result) {
-                    setFaceDetection({ box: result.box, match: result.match });
+                    if (result) {
+                        setFaceDetection({ box: result.box, match: result.match });
 
-                    if (result.match && dniState === '') {
-                        setFaceSuggestion(result.match);
-                    } else if (!result.match) {
+                        if (result.match && dniState === '') {
+                            setFaceSuggestion(result.match);
+                        } else if (!result.match) {
+                            setFaceSuggestion(null);
+                        }
+                    } else {
+                        setFaceDetection(null);
                         setFaceSuggestion(null);
                     }
-                } else {
-                    setFaceDetection(null);
-                    setFaceSuggestion(null);
+                } finally {
+                    isProcessingRef.current = false;
                 }
             }, FACE_SCAN_INTERVAL);
         }
@@ -91,7 +105,7 @@ function App() {
             setFaceSuggestion(null);
             setFaceDetection(null);
         };
-    }, [cameraActive, dniState]);
+    }, [cameraActive, modelsReady, dniState]);
 
     useEffect(() => {
         return () => {
@@ -188,6 +202,8 @@ function App() {
         });
     }, [dniState]);
 
+
+
     const returnNotFound = () => (
         <div className="flex flex-col items-center gap-3">
             <img className="w-16" src="/icons8-usuario-no-encontrado-50.png" alt="not-found" />
@@ -219,7 +235,7 @@ function App() {
     const resetLogin = () => {
         setDniState('');
         setResultUserState(null);
-        setCameraImageSrc('');
+        setResultUserState
     };
 
     return (

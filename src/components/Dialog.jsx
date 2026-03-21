@@ -28,6 +28,7 @@ export default forwardRef(function CustomDialog({ callback = () => {} }, ref) {
         if (onCloseCallback) {
             onCloseCallback();
             setOnCloseCallback(null);
+            callback();
         } else {
             callback();
         }

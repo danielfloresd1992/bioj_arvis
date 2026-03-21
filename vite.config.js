@@ -9,4 +9,7 @@ export default defineConfig({
         react(),
         basicSsl()
     ],
+    worker: {
+        format: 'es'
+    },
 })
