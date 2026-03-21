@@ -2,7 +2,7 @@ import { useEffect, useRef, forwardRef, useImperativeHandle, useState, useCallba
 
 export default forwardRef(function CameraBox({ isActive = false, faceDetection = null }, ref) {
 
-    
+
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
     const overlayRef = useRef(null);
@@ -26,6 +26,7 @@ export default forwardRef(function CameraBox({ isActive = false, faceDetection =
         }
     };
 
+    
     const stopCamera = () => {
         if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => track.stop());
@@ -40,6 +41,9 @@ export default forwardRef(function CameraBox({ isActive = false, faceDetection =
     useEffect(() => {
         if (isActive && !streamRef.current) {
             startCamera();
+        }
+        else{
+            stopCamera();
         }
     }, [isActive]);
 
@@ -156,6 +160,8 @@ export default forwardRef(function CameraBox({ isActive = false, faceDetection =
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, [drawOverlay]);
+
+
 
     const getImageFileAnd64 = async (callback) => {
         if (!streamRef.current) await startCamera();
