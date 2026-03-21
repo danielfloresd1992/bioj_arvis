@@ -22,7 +22,7 @@ import { sucessAudio } from './libs/audio_content';
 import { loadModels, isReady, getDescriptor, saveDescriptor, detectFace } from './libs/faceRecognition';
 
 const IDLE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
-const FACE_SCAN_INTERVAL = 1500; // escanear rostro cada 1.5s (el Worker libera el main thread)
+const FACE_SCAN_INTERVAL = 1500; // escanear rostro cada 1.5s (TinyFaceDetector ~20-50ms por frame)
 
 function App() {
 
@@ -62,7 +62,7 @@ function App() {
     }, []);
 
 
-    // Cargar modelos de reconocimiento facial al inicio (en Web Worker)
+    // Cargar modelos de reconocimiento facial al inicio
     useEffect(() => {
         loadModels()
             .then(() => setModelsReady(true))
@@ -75,7 +75,7 @@ function App() {
     useEffect(() => {
         if (cameraActive && modelsReady) {
             faceScanRef.current = setInterval(async () => {
-                // Lock: evitar que detecciones se acumulen si el Worker tarda
+                // Lock: evitar que detecciones se acumulen
                 if (isProcessingRef.current) return;
                 const video = cameraRef.current?.getVideoElement();
                 if (!video || video.readyState < 2) return;

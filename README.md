@@ -1,6 +1,6 @@
 # BioJarvis - Sistema Biometrico de Control de Asistencia
 
-Sistema de control de entrada y salida de personal con reconocimiento facial progresivo mediante aprendizaje automatico en el navegador. El procesamiento ML corre en un **Web Worker** (hilo separado) para mantener la interfaz fluida.
+Sistema de control de entrada y salida de personal con reconocimiento facial progresivo mediante aprendizaje automatico en el navegador.
 
 ---
 
@@ -11,7 +11,6 @@ Sistema de control de entrada y salida de personal con reconocimiento facial pro
 - [Estructura del proyecto](#estructura-del-proyecto)
 - [Flujo general de la aplicacion](#flujo-general-de-la-aplicacion)
 - [Modulo de reconocimiento facial (ML)](#modulo-de-reconocimiento-facial-ml)
-- [Arquitectura del Web Worker](#arquitectura-del-web-worker)
 - [Overlay de deteccion facial](#overlay-de-deteccion-facial)
 - [Endpoints de la API](#endpoints-de-la-api)
 - [Instalacion y ejecucion](#instalacion-y-ejecucion)
@@ -40,7 +39,7 @@ Adicionalmente, el sistema integra **reconocimiento facial progresivo**: cada ve
 | Capacitor | Empaquetado nativo Android/iOS |
 | cordova-plugin-advanced-http | Peticiones HTTP nativas (evita CORS) |
 | face-api.js | Reconocimiento facial basado en TensorFlow.js |
-| Web Worker | Hilo separado para inferencia ML sin bloquear UI |
+| TinyFaceDetector | Detector de rostros rapido (~20-50ms por frame) |
 | IndexedDB | Almacenamiento local de descriptores faciales |
 
 ---
@@ -70,8 +69,7 @@ src/
 │
 ├── libs/
 │   ├── audio_content.js           # Efectos de sonido (click, exito)
-│   ├── faceRecognition.js         # Wrapper liviano - comunica con el Web Worker
-│   ├── faceWorker.js              # Web Worker - inferencia ML en hilo separado
+│   ├── faceRecognition.js         # Servicio de reconocimiento facial (face-api.js + IndexedDB)
 │   └── file.js                    # Utilidad base64 (no utilizada actualmente)
 │
 public/
@@ -96,7 +94,7 @@ public/
 │                                                             │
 │   - Protector de pantalla activo (animacion aleatoria)      │
 │   - Camara apagada                                          │
-│   - Modelos de ML cargandose en Web Worker                  │
+│   - Modelos de ML cargandose en segundo plano               │
 │                                                             │
 └──────────────────────┬──────────────────────────────────────┘
                        │
@@ -181,43 +179,48 @@ public/
 
 ### Flujo detallado paso a paso
 
-1. **Inicio de la app**: Se lanza un Web Worker que carga los modelos de reconocimiento facial (~7 MB total) en un hilo separado. La interfaz no se congela durante la carga. Muestra el protector de pantalla con animaciones aleatorias (matrix, orbitas, ondas, respiracion).
+1. **Inicio de la app**: Se cargan los modelos de reconocimiento facial (~7 MB total) de forma asincrona. La interfaz muestra el protector de pantalla con animaciones aleatorias (matrix, orbitas, ondas, respiracion). El estado `modelsReady` se activa cuando la carga termina.
 
 2. **Activacion**: Cuando el usuario toca cualquier tecla, el protector de pantalla desaparece, la camara frontal se enciende y comienza un timer de inactividad de 5 minutos.
 
 3. **Ingreso de cedula**: El usuario escribe su numero de cedula usando el teclado numerico en pantalla (o un teclado fisico). Cada tecla reproduce un sonido de click.
 
-4. **Deteccion facial en tiempo real**: Mientras la camara esta activa, cada 1.5 segundos el main thread captura un frame del video como `ImageBitmap` y lo transfiere al Web Worker (zero-copy). El Worker ejecuta la deteccion, extrae el descriptor y busca coincidencia en IndexedDB. Los resultados se devuelven al main thread, que dibuja un cuadro sobre el rostro en un canvas overlay:
-   - **Cuadro gris** con etiqueta "Rostro no reconocido" si la persona aun no tiene suficientes muestras
-   - **Cuadro verde** con etiqueta "CI: 24939156 (87%)" si el sistema la reconoce
-   - Si el campo de cedula esta vacio y hay coincidencia, aparece un boton de sugerencia debajo del input
+4. **Deteccion facial en tiempo real**: Mientras la camara esta activa y los modelos estan cargados, cada 1.5 segundos se ejecuta `detectFace(video)` que:
+   - Detecta el rostro con **TinyFaceDetector** (~20-50ms, no bloquea la UI perceptiblemente)
+   - Extrae 68 puntos de referencia facial (landmarks)
+   - Genera un descriptor de 128 dimensiones (huella facial unica)
+   - Busca coincidencia en IndexedDB contra los descriptores almacenados
+   - Un **lock de procesamiento** (`isProcessingRef`) evita que las detecciones se acumulen
+   - Los resultados se pasan al componente `CameraBox` que dibuja un **cuadro sobre el rostro**:
+     - **Cuadro gris** con etiqueta "Rostro no reconocido" si la persona aun no tiene suficientes muestras
+     - **Cuadro verde** con etiqueta "CI: 24939156 (87%)" si el sistema la reconoce
+   - Si el campo de cedula esta vacio y hay coincidencia, aparece un **boton de sugerencia** debajo del input
 
 5. **Envio**: Al presionar Enter, se captura el frame actual de la camara, se sube la imagen al servidor multimedia y se envia la cedula junto con la URL de la imagen a la API de asistencia.
 
-6. **Resultado**: Se muestra un dialogo con el resultado (exito, error o advertencia). En caso de exito:
-   - Se muestran la foto capturada y los datos del usuario en el panel inferior
-   - El sistema guarda el descriptor facial en el Worker para futuras detecciones
-   - Al cerrar el dialogo, solo se limpia la cedula; la foto y datos **persisten** visibles
-   - Los datos se limpian cuando el usuario empieza a escribir una nueva cedula o el idle timer se activa
+6. **Resultado exitoso**: Se muestra un dialogo de exito. El sistema guarda el descriptor facial para futuras detecciones. Al cerrar el dialogo, la foto y datos **persisten** visibles. Se limpian cuando el usuario empieza a escribir una nueva cedula o el idle timer se activa.
 
-7. **Reset en error**: Al cerrar un dialogo de error, se realiza un reset completo (cedula, datos y foto se limpian).
+7. **Resultado error**: Al cerrar un dialogo de error, se realiza un reset completo.
 
 ---
 
 ## Modulo de reconocimiento facial (ML)
 
+### Libreria: face-api.js
+
+Se usa **face-api.js**, una libreria construida sobre **TensorFlow.js** que permite ejecutar reconocimiento facial completamente en el navegador, sin necesidad de backend ML ni conexion a internet para el procesamiento.
+
+> **Nota sobre Web Workers**: face-api.js depende internamente de APIs del DOM (`document.createElement`, `HTMLCanvasElement`, `getContext('2d')`, etc.) y de TensorFlow.js que requiere acceso al canvas del navegador. Por esta razon, **no puede ejecutarse de manera confiable en un Web Worker**. En su lugar, se usa **TinyFaceDetector** que es suficientemente rapido (~20-50ms por frame) para correr en el main thread sin afectar la fluidez de la interfaz.
+
 ### Pipeline de redes neuronales
 
-El reconocimiento facial se ejecuta **completamente en el navegador** usando `face-api.js` (TensorFlow.js) dentro de un Web Worker. No requiere backend adicional ni conexion a internet para el procesamiento ML.
-
 ```
-                    face-api.js (TensorFlow.js) — en Web Worker
+                    face-api.js (TensorFlow.js)
                     ┌─────────────────────────────────────┐
                     │                                     │
-  ImageBitmap ────→ │  1. TinyFaceDetector                │
-  (del video)       │     Detecta rostros en la imagen     │
-                    │     (190 KB, ~10x mas rapido que     │
-                    │      SSD MobileNet)                  │
+  Video element ──→ │  1. TinyFaceDetector                │
+                    │     Detecta rostros en la imagen     │
+                    │     (190 KB, ~20-50ms por frame)     │
                     │                                     │
                     │  2. Face Landmark 68                 │
                     │     Identifica 68 puntos de          │
@@ -233,7 +236,7 @@ El reconocimiento facial se ejecuta **completamente en el navegador** usando `fa
 
 ### Almacenamiento: IndexedDB
 
-Los descriptores faciales se almacenan en el navegador usando **IndexedDB**, una base de datos NoSQL integrada en todos los navegadores modernos. IndexedDB es accesible tanto desde el main thread como desde el Web Worker.
+Los descriptores faciales se almacenan en el navegador usando **IndexedDB**, una base de datos NoSQL integrada en todos los navegadores modernos.
 
 ```
 Base de datos: biojarvis_faces
@@ -248,6 +251,8 @@ Cada registro contiene:
 - `descriptors`: un arreglo de hasta **25 descriptores faciales** (los mas recientes)
 
 ### Proceso de aprendizaje progresivo
+
+Asi es como el sistema aprende a reconocer a una persona con el tiempo:
 
 ```
   Dia 1 (1er registro)          Dia 2 (2do registro)         Dia 5+ (3er registro+)
@@ -267,102 +272,52 @@ Cada registro contiene:
                                                             24939156 (87%)"
 ```
 
-**Regla de umbral**: El sistema necesita al menos **3 descriptores** almacenados de una persona antes de comenzar a reconocerla. Esto evita falsos positivos con pocas muestras.
+1. **Registro 1-2**: El usuario marca su asistencia con su cedula. Al exito, se captura el descriptor facial y se guarda en IndexedDB. El cuadro sobre su rostro aparece **gris** porque necesita minimo 3 muestras.
 
-**Maximo de muestras**: Se almacenan hasta **25 descriptores** por persona. Los mas antiguos se descartan cuando se alcanza el limite, manteniendo las muestras mas recientes y relevantes.
+2. **Registro 3+**: Con 3 o mas descriptores almacenados, el sistema comienza a reconocer a la persona. El cuadro cambia a **verde** mostrando su cedula y porcentaje de confianza. Un boton de sugerencia aparece para auto-rellenar la cedula.
 
-**Umbral de coincidencia**: La distancia euclidiana entre descriptores debe ser menor a **0.55** para considerarse una coincidencia (escala 0-1, donde 0 es identico).
+3. **Registros sucesivos**: Cada registro exitoso agrega un nuevo descriptor, mejorando la precision (diferentes angulos, iluminacion). Se almacenan hasta 25 descriptores por persona.
 
----
+**Regla de umbral**: Minimo **3 descriptores** antes de reconocer (evita falsos positivos).
 
-## Arquitectura del Web Worker
+**Umbral de coincidencia**: Distancia euclidiana menor a **0.55** (escala 0-1, donde 0 es identico).
 
-El procesamiento ML se ejecuta en un hilo separado para no bloquear la interfaz de usuario.
+### Funciones del servicio (faceRecognition.js)
 
-```
-    Main Thread (UI fluida)                    Web Worker (hilo separado)
-    ───────────────────────                    ─────────────────────────
+| Funcion | Descripcion |
+|---|---|
+| `loadModels()` | Carga los 3 modelos de red neuronal (TinyFaceDetector + Landmark + Recognition). Se ejecuta una vez al iniciar la app. |
+| `isReady()` | Retorna `true` si los modelos estan cargados y listos para usar. |
+| `detectFace(videoElement)` | Detecta el rostro, genera descriptor, busca coincidencia en IndexedDB. Retorna `{ box, descriptor, match }` o `null`. |
+| `getDescriptor(videoElement)` | Extrae solo el descriptor facial. Retorna `Float32Array[128]` o `null`. |
+| `saveDescriptor(dni, descriptor)` | Guarda un descriptor facial asociado a una cedula en IndexedDB. |
+| `findMatch(descriptor)` | Compara un descriptor contra todos los registrados. Retorna `{ dni, confidence }` o `null`. |
 
-    ┌─────────────────────┐
-    │ createImageBitmap() │ ← captura frame
-    │   (microsegundos)   │   del video
-    └─────────┬───────────┘
-              │
-              │  postMessage + transfer
-              │  (zero-copy, sin clonar)
-              │
-              ▼                                ┌──────────────────────────┐
-                                               │ Recibe ImageBitmap       │
-                                               │         │                │
-                                               │         ▼                │
-                                               │ OffscreenCanvas          │
-                                               │         │                │
-                                               │         ▼                │
-                                               │ TinyFaceDetector         │
-                                               │   (deteccion de rostro)  │
-                                               │         │                │
-                                               │         ▼                │
-                                               │ FaceLandmark68           │
-                                               │   (puntos faciales)      │
-                                               │         │                │
-                                               │         ▼                │
-                                               │ FaceRecognitionNet       │
-                                               │   (descriptor 128D)      │
-                                               │         │                │
-                                               │         ▼                │
-                                               │ IndexedDB                │
-                                               │   (buscar coincidencia)  │
-                                               └─────────┬────────────────┘
-                                                         │
-              ┌──────────────────────────────────────────┘
-              │  postMessage
-              │  { box, descriptor, match }
-              ▼
-    ┌─────────────────────┐
-    │ setFaceDetection()  │ ← actualiza estado React
-    │ drawOverlay()       │ ← dibuja cuadro en canvas
-    │   (milisegundos)    │
-    └─────────────────────┘
-```
+### Optimizaciones de rendimiento
 
-### Comunicacion main thread ↔ Worker
-
-| Mensaje | Direccion | Datos | Descripcion |
-|---|---|---|---|
-| `init` | Main → Worker | `{ modelPath }` | Carga modelos de ML |
-| `detect` | Main → Worker | `{ imageBitmap }` (transferable) | Detecta rostro + busca coincidencia |
-| `getDescriptor` | Main → Worker | `{ imageBitmap }` (transferable) | Extrae descriptor sin buscar match |
-| `save` | Main → Worker | `{ dni, descriptor }` | Guarda descriptor en IndexedDB |
-| respuesta | Worker → Main | `{ id, result }` o `{ id, error }` | Resultado de la operacion |
-
-### Polyfills en el Worker
-
-face-api.js requiere APIs del DOM que no existen en Web Workers. El archivo `faceWorker.js` incluye polyfills minimos:
-
-- `document.createElement('canvas')` → `OffscreenCanvas`
-- `HTMLCanvasElement` → `OffscreenCanvas`
-- `HTMLImageElement`, `HTMLVideoElement` → clases vacias
-- `window` → `self`
-
-### Lock de procesamiento
-
-Un `isProcessingRef` en App.jsx evita que las detecciones se acumulen si el Worker tarda mas del intervalo de escaneo. El intervalo solo lanza una nueva deteccion si la anterior ya termino.
+| Tecnica | Descripcion |
+|---|---|
+| **TinyFaceDetector** | Modelo de deteccion de ~190 KB que corre en ~20-50ms (vs SSD MobileNet ~200ms y ~5.6 MB) |
+| **Lock de procesamiento** | `isProcessingRef` evita que las detecciones se acumulen si una tarda mas del intervalo |
+| **Intervalo de 1.5s** | Balancea frecuencia de deteccion con uso de CPU (~3% del main thread) |
+| **inputSize: 320** | Resolucion de entrada del detector optimizada (no procesa la imagen completa) |
+| **Opciones reutilizables** | Las opciones de TinyFaceDetector se crean una vez y se reutilizan en cada deteccion |
 
 ---
 
 ## Overlay de deteccion facial
 
-El componente `CameraBox` incluye un canvas overlay transparente superpuesto al video que dibuja en tiempo real:
+El componente `CameraBox` incluye un canvas overlay (`overlayRef`) transparente superpuesto al video que dibuja en tiempo real los resultados de la deteccion:
 
 ### Rostro no reconocido (cuadro gris)
 
 ```
     ┌─────────────────────────────┐
-    │ Rostro no reconocido        │  ← etiqueta gris
+    │ Rostro no reconocido        │  ← etiqueta fondo gris oscuro
     ├─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─┤
     │┌─                         ─┐│
     ││                           ││
-    ││       (rostro)            ││  ← cuadro gris con esquinas
+    ││       (rostro)            ││  ← cuadro gris (#64748b) con esquinas decorativas
     ││                           ││
     │└─                         ─┘│
     └─────────────────────────────┘
@@ -372,31 +327,17 @@ El componente `CameraBox` incluye un canvas overlay transparente superpuesto al 
 
 ```
     ┌─────────────────────────────┐
-    │ CI: 24939156  (87%)         │  ← etiqueta verde
+    │ CI: 24939156  (87%)         │  ← etiqueta fondo verde
     ├─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─┤
     │┌─                         ─┐│
     ││                           ││
-    ││       (rostro)            ││  ← cuadro verde con esquinas
+    ││       (rostro)            ││  ← cuadro verde (#10b981) con esquinas decorativas
     ││                           ││
     │└─                         ─┘│
     └─────────────────────────────┘
 ```
 
-El overlay usa coordenadas normalizadas (0-1) que el Worker calcula relativas al tamano del frame. `CameraBox` las escala al tamano real del contenedor, por lo que el cuadro se posiciona correctamente sin importar el tamano de la ventana.
-
----
-
-## Funciones del wrapper (faceRecognition.js)
-
-El archivo `faceRecognition.js` es un wrapper liviano que expone una API asincrona y se comunica con el Worker internamente:
-
-| Funcion | Descripcion |
-|---|---|
-| `loadModels()` | Crea el Web Worker y carga los 3 modelos de ML. Se ejecuta una vez al iniciar la app. |
-| `isReady()` | Retorna `true` si el Worker esta listo y los modelos cargados. |
-| `detectFace(videoElement)` | Captura frame, envia al Worker, retorna `{ box, descriptor, match }` o `null`. |
-| `getDescriptor(videoElement)` | Captura frame, envia al Worker, retorna `Float32Array[128]` o `null`. |
-| `saveDescriptor(dni, descriptor)` | Envia al Worker para guardar en IndexedDB. |
+El overlay usa **coordenadas normalizadas (0-1)** calculadas en `detectFace()` relativas al tamano del frame original. `CameraBox` las escala al tamano real del contenedor en `drawOverlay()`, por lo que el cuadro se posiciona correctamente sin importar el tamano de la ventana. Se redibuja automaticamente al redimensionar.
 
 ---
 
@@ -424,18 +365,17 @@ La integracion del ML **no modifica** el flujo original de la aplicacion. Se agr
   │ detecta el   │      │ rostro en el   │      │ guardar        │
   │ rostro y     │      │ video con      │      │ descriptor     │
   │ busca match  │      │ identidad o    │      │ facial en      │
-  │ en Worker    │      │ "no reconocido"│      │ IndexedDB      │
-  │ → sugerencia │      │                │      │ (via Worker)   │
+  │ → sugerencia │      │ "no reconocido"│      │ IndexedDB      │
   └──────────────┘      └────────────────┘      └────────────────┘
 ```
 
 **Puntos de integracion en App.jsx:**
 
-1. **useEffect loadModels** (linea 61): Crea el Web Worker y carga modelos. `modelsReady` se vuelve `true` al completarse.
-2. **useEffect escaneo** (linea 68): Inicia intervalo de deteccion cuando `cameraActive && modelsReady`. Incluye lock para evitar acumulacion.
-3. **submitData exitoso** (linea 188): Tras un registro exitoso, captura un frame y envia al Worker para guardar el descriptor.
-4. **CameraBox faceDetection prop** (linea 278): Pasa `{ box, match }` al componente que dibuja el overlay.
-5. **UI de sugerencia** (linea 251): Renderiza el boton de sugerencia cuando hay coincidencia facial y la cedula esta vacia.
+1. **useEffect loadModels**: Carga modelos al montar. `modelsReady` se vuelve `true` al completarse.
+2. **useEffect escaneo**: Inicia intervalo cuando `cameraActive && modelsReady`. Incluye lock para evitar acumulacion.
+3. **submitData exitoso**: Extrae descriptor del video y lo guarda en IndexedDB para aprendizaje futuro.
+4. **CameraBox faceDetection prop**: Pasa `{ box, match }` al componente que dibuja el overlay en canvas.
+5. **UI de sugerencia**: Boton verde debajo del input de cedula cuando hay coincidencia facial.
 
 ---
 
@@ -515,11 +455,7 @@ npm run build
 npm run preview
 ```
 
-Los archivos compilados se generan en la carpeta `dist/`:
-- `index.html` — punto de entrada
-- `assets/index-*.js` — app principal (~322 KB)
-- `assets/faceWorker-*.js` — Web Worker con face-api.js (~665 KB, carga en hilo separado)
-- `assets/index-*.css` — estilos (~33 KB)
+Los archivos compilados se generan en la carpeta `dist/`.
 
 ---
 
@@ -533,17 +469,6 @@ Crear un archivo `.env` en la raiz del proyecto:
 VITE_API_URL=https://amazona365.ddns.net/api_jarvis/v1
 ```
 
-### Configuracion de Vite (vite.config.js)
-
-```js
-export default defineConfig({
-    plugins: [react(), basicSsl()],
-    worker: {
-        format: 'es'  // Requerido para Web Workers con imports ESM
-    },
-})
-```
-
 ### Constantes configurables
 
 En `App.jsx`:
@@ -551,9 +476,9 @@ En `App.jsx`:
 | Constante | Valor por defecto | Descripcion |
 |---|---|---|
 | `IDLE_TIMEOUT` | 300000 (5 min) | Tiempo de inactividad antes de mostrar el screensaver |
-| `FACE_SCAN_INTERVAL` | 1500 (1.5s) | Frecuencia de escaneo facial (el Worker permite intervalos cortos) |
+| `FACE_SCAN_INTERVAL` | 1500 (1.5s) | Frecuencia de escaneo facial |
 
-En `faceWorker.js`:
+En `faceRecognition.js`:
 
 | Constante | Valor por defecto | Descripcion |
 |---|---|---|
@@ -612,8 +537,8 @@ En la version movil, las peticiones HTTP se realizan mediante el plugin nativo `
 ## Notas tecnicas
 
 - **Seguridad HTTPS**: La app requiere HTTPS para acceder a la camara del dispositivo. En desarrollo se usa `@vitejs/plugin-basic-ssl` para generar un certificado autofirmado.
-- **Almacenamiento facial local**: Los descriptores faciales se almacenan exclusivamente en el dispositivo mediante IndexedDB (accedida desde el Web Worker). No se envian al servidor. Si se limpia el almacenamiento del navegador, el aprendizaje facial se reinicia.
-- **Rendimiento ML**: Toda la inferencia corre en un Web Worker, liberando el main thread. El modelo TinyFaceDetector es ~10x mas rapido que SSD MobileNet. Un lock de procesamiento evita que las detecciones se acumulen si el Worker tarda mas que el intervalo de escaneo.
-- **Tamano del bundle**: El app principal pesa ~322 KB. face-api.js (~665 KB) carga en el Worker separado. Los modelos (~7 MB) se descargan bajo demanda y el navegador los cachea.
-- **Compatibilidad Worker**: El Web Worker requiere soporte de `OffscreenCanvas`, `createImageBitmap` y `type: 'module'`. Compatible con Chrome 69+, Firefox 105+, Edge 79+ y Safari 16.4+.
+- **Almacenamiento facial local**: Los descriptores faciales se almacenan exclusivamente en el dispositivo mediante IndexedDB. No se envian al servidor. Si se limpia el almacenamiento del navegador, el aprendizaje facial se reinicia.
+- **face-api.js y Web Workers**: face-api.js depende de APIs del DOM (`document.createElement('canvas')`, `HTMLCanvasElement`, etc.) y de TensorFlow.js que requiere acceso al canvas del navegador. Por esta razon no puede ejecutarse de manera confiable en un Web Worker. Se usa TinyFaceDetector en el main thread con un lock de procesamiento, lo que resulta en ~3% de uso del main thread (20-50ms cada 1.5s).
+- **Rendimiento**: TinyFaceDetector es ~10x mas rapido que SSD MobileNet v1 (190 KB vs 5.6 MB, 20-50ms vs 200ms). El lock `isProcessingRef` evita que las detecciones se acumulen.
+- **Tamano del bundle**: ~964 KB (incluye face-api.js con TensorFlow.js). Los modelos (~7 MB) se cargan bajo demanda y el navegador los cachea.
 - **Dialog con callbacks individuales**: El componente `CustomDialog` soporta un callback opcional por apertura (`openDialog(title, type, desc, closeCallback)`), permitiendo comportamiento diferente al cerrar dialogos de exito vs error.
