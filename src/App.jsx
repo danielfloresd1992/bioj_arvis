@@ -120,6 +120,7 @@ function App() {
         };
     }, []);
 
+
     const handdlerGetDni = useCallback((value) => {
         resetIdleTimer();
 
@@ -218,12 +219,16 @@ function App() {
         </div>
     );
 
+
+    
     const returnUsersuccessful = (text) => (
         <div className="flex flex-col items-center gap-3">
             <img className="w-16" src="/icons8-evento-96.png" alt="success" />
             <p className="text-lg text-emerald-300 text-center">{text}</p>
         </div>
     );
+
+
 
     const returnAttendanceConflict = (text) => (
         <div className="flex flex-col items-center gap-3">
@@ -232,6 +237,8 @@ function App() {
         </div>
     );
 
+
+
     const returnApiMessage = (text, iconSrc = '/icons8-error-50.png') => (
         <div className="flex flex-col items-center gap-3">
             <img className="w-16" src={iconSrc} alt="message" />
@@ -239,11 +246,16 @@ function App() {
         </div>
     );
 
+
+
     const resetLogin = () => {
         setDniState('');
         setResultUserState(null);
         setCameraActive(false);
+        setShowScreenSaver(true);
     };
+
+
 
     return (
         <div className="w-full h-full flex flex-col bg-[#0b0f14]">

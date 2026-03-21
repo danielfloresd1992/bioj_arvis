@@ -2,6 +2,7 @@ import { useEffect, useRef, forwardRef, useImperativeHandle, useState, useCallba
 
 export default forwardRef(function CameraBox({ isActive = false, faceDetection = null }, ref) {
 
+    
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
     const overlayRef = useRef(null);
