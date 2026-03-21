@@ -44,6 +44,8 @@ function App() {
     const faceScanRef = useRef(null);
     const isProcessingRef = useRef(false);
 
+
+
     const resetIdleTimer = useCallback(() => {
         setShowScreenSaver(false);
         setCameraActive(true);
@@ -59,6 +61,7 @@ function App() {
         }, IDLE_TIMEOUT);
     }, []);
 
+
     // Cargar modelos de reconocimiento facial al inicio (en Web Worker)
     useEffect(() => {
         loadModels()
@@ -66,6 +69,8 @@ function App() {
             .catch(err => console.error('[FaceRecognition] Error cargando modelos:', err));
     }, []);
 
+
+    
     // Escaneo periódico de rostro mientras la cámara esté activa
     useEffect(() => {
         if (cameraActive && modelsReady) {
@@ -106,6 +111,8 @@ function App() {
             setFaceDetection(null);
         };
     }, [cameraActive, modelsReady, dniState]);
+
+
 
     useEffect(() => {
         return () => {
@@ -235,7 +242,7 @@ function App() {
     const resetLogin = () => {
         setDniState('');
         setResultUserState(null);
-        setResultUserState
+        setCameraActive(false);
     };
 
     return (
