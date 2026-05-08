@@ -122,28 +122,6 @@ function App() {
     }, []);
 
 
-    const handdlerGetDni = useCallback((value) => {
-        resetIdleTimer();
-
-        // Limpiar datos del registro anterior al empezar a escribir
-        if (userResultState) {
-            setResultUserState(null);
-            setCameraImageSrc('');
-        }
-
-        let currentValue = dniState;
-        if (value === '') return;
-        else if (value === '⌫' || value === 'Backspace') {
-            const dniArr = dniState.split('');
-            dniArr.pop();
-            currentValue = dniArr.join('');
-        }
-        else if (value === '⏎' || value === 'Enter' || value === 'Entrar') { submitData(); return; }
-        else if (value.length > 1) { }
-        else currentValue = currentValue + value;
-        setDniState(currentValue);
-    }, [dniState, submitData]);
-
     const submitData = useCallback(async () => {
         if (dniState === '' || isSubmittingRef.current) return;
         if (!cameraRef.current) return;
@@ -219,6 +197,27 @@ function App() {
         });
     }, [dniState]);
 
+    const handdlerGetDni = useCallback((value) => {
+        resetIdleTimer();
+
+        // Limpiar datos del registro anterior al empezar a escribir
+        if (userResultState) {
+            setResultUserState(null);
+            setCameraImageSrc('');
+        }
+
+        let currentValue = dniState;
+        if (value === '') return;
+        else if (value === '⌫' || value === 'Backspace') {
+            const dniArr = dniState.split('');
+            dniArr.pop();
+            currentValue = dniArr.join('');
+        }
+        else if (value === '⏎' || value === 'Enter' || value === 'Entrar') { submitData(); return; }
+        else if (value.length > 1) { }
+        else currentValue = currentValue + value;
+        setDniState(currentValue);
+    }, [dniState, submitData]);
 
 
     const returnNotFound = () => (
