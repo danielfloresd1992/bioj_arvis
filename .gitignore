@@ -25,3 +25,4 @@ server.crt
 *.njsproj
 *.sln
 *.sw?
+.gitignore

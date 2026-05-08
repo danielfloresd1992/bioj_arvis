@@ -43,6 +43,7 @@ function App() {
     const idleTimerRef = useRef(null);
     const faceScanRef = useRef(null);
     const isProcessingRef = useRef(false);
+    const isSubmittingRef = useRef(false);
 
 
 
@@ -137,76 +138,84 @@ function App() {
             dniArr.pop();
             currentValue = dniArr.join('');
         }
-        else if (value === '⏎' || value === 'Enter' || value === 'Entrar') submitData();
+        else if (value === '⏎' || value === 'Enter' || value === 'Entrar') { submitData(); return; }
         else if (value.length > 1) { }
         else currentValue = currentValue + value;
         setDniState(currentValue);
-    }, [dniState]);
+    }, [dniState, submitData]);
 
     const submitData = useCallback(async () => {
-        if (dniState === '') return null;
-
+        if (dniState === '' || isSubmittingRef.current) return;
         if (!cameraRef.current) return;
+
+        isSubmittingRef.current = true;
+        dialogRef.current.openLoading();
 
         cameraRef.current.getImage(async (image) => {
             setCameraImageSrc(image.base64);
 
-            const responseMultimedia = await sendImage(image.file);
+            try {
+                const responseMultimedia = await sendImage(image.file);
 
-            userIsExistAttendance(dniState, responseMultimedia.url, (error, response) => {
-                if (error) {
-                    if (error?.status === 404) {
-                        dialogRef.current.openDialog('Usuario no encontrado', 'error', returnNotFound());
-                    } else if (error?.status === 400) {
-                        dialogRef.current.openDialog(
-                            'Solicitud inválida', 'warning',
-                            returnApiMessage(error?.data?.message || 'Los datos enviados no son válidos.')
-                        );
-                    } else if (error?.status === 409) {
-                        dialogRef.current.openDialog(
-                            'Registro duplicado', 'warning',
-                            returnAttendanceConflict(error?.data?.message || 'La jornada de hoy ya fue cerrada previamente para este usuario.')
-                        );
+                userIsExistAttendance(dniState, responseMultimedia.url, (error, response) => {
+                    isSubmittingRef.current = false;
+                    if (error) {
+                        if (error?.status === 404) {
+                            dialogRef.current.openDialog('Usuario no encontrado', 'error', returnNotFound());
+                        } else if (error?.status === 400) {
+                            dialogRef.current.openDialog(
+                                'Solicitud inválida', 'warning',
+                                returnApiMessage(error?.data?.message || 'Los datos enviados no son válidos.')
+                            );
+                        } else if (error?.status === 409) {
+                            dialogRef.current.openDialog(
+                                'Registro duplicado', 'warning',
+                                returnAttendanceConflict(error?.data?.message || 'La jornada de hoy ya fue cerrada previamente para este usuario.')
+                            );
+                        } else {
+                            dialogRef.current.openDialog(
+                                'Error inesperado', 'error',
+                                returnApiMessage(error?.data?.message || 'Ocurrió un error inesperado en el servidor.')
+                            );
+                        }
                     } else {
-                        dialogRef.current.openDialog(
-                            'Error inesperado', 'error',
-                            returnApiMessage(error?.data?.message || 'Ocurrió un error inesperado en el servidor.')
-                        );
-                    }
-                } else {
-                    if (response?.status === 404) {
-                        dialogRef.current.openDialog('Usuario no encontrado', 'error', returnNotFound());
-                    } else if (response?.status === 400) {
-                        dialogRef.current.openDialog(
-                            'Solicitud inválida', 'warning',
-                            returnApiMessage(response?.data?.message || 'Los datos enviados no son válidos.')
-                        );
-                    } else if (response?.status === 409) {
-                        dialogRef.current.openDialog(
-                            'Registro duplicado', 'warning',
-                            returnAttendanceConflict(response?.data?.message || 'La jornada de hoy ya fue cerrada previamente para este usuario.')
-                        );
-                    } else {
-                        setResultUserState(response.data.user);
-                        dialogRef.current.openDialog(
-                            'Usuario registrado', 'success',
-                            returnUsersuccessful(response.data.message),
-                            () => setDniState('')
-                        );
-                        sucessAudio();
+                        if (response?.status === 404) {
+                            dialogRef.current.openDialog('Usuario no encontrado', 'error', returnNotFound());
+                        } else if (response?.status === 400) {
+                            dialogRef.current.openDialog(
+                                'Solicitud inválida', 'warning',
+                                returnApiMessage(response?.data?.message || 'Los datos enviados no son válidos.')
+                            );
+                        } else if (response?.status === 409) {
+                            dialogRef.current.openDialog(
+                                'Registro duplicado', 'warning',
+                                returnAttendanceConflict(response?.data?.message || 'La jornada de hoy ya fue cerrada previamente para este usuario.')
+                            );
+                        } else {
+                            setResultUserState(response.data.user);
+                            dialogRef.current.openDialog(
+                                'Usuario registrado', 'success',
+                                returnUsersuccessful(response.data.message),
+                                () => setDniState('')
+                            );
+                            sucessAudio();
 
-                        // Aprendizaje facial: guardar descriptor asociado a esta cédula
-                        if (isReady()) {
-                            const video = cameraRef.current?.getVideoElement();
-                            if (video) {
-                                getDescriptor(video).then(desc => {
-                                    if (desc) saveDescriptor(dniState, desc);
-                                });
+                            // Aprendizaje facial: guardar descriptor asociado a esta cédula
+                            if (isReady()) {
+                                const video = cameraRef.current?.getVideoElement();
+                                if (video) {
+                                    getDescriptor(video).then(desc => {
+                                        if (desc) saveDescriptor(dniState, desc);
+                                    });
+                                }
                             }
                         }
                     }
-                }
-            });
+                });
+            } catch {
+                isSubmittingRef.current = false;
+                dialogRef.current.closeLoading();
+            }
         });
     }, [dniState]);
 

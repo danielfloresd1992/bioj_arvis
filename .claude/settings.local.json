@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Sistema-2\\\\Desktop\\\\servicios\\\\bioj_arvis\\\\src\" -Recurse -File | Select-Object FullName, @{N='Size';E={$_.Length}} | ForEach-Object { $_.FullName + \" \\(\" + $_.Size + \" bytes\\)\" })"
+    ]
+  }
+}

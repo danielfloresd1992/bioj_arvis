@@ -20,6 +20,7 @@ const DIALOG_STYLES = {
 
 export default forwardRef(function CustomDialog({ callback = () => {} }, ref) {
 
+    const [loading, setLoading] = useState(false);
     const [state, setState] = useState({ open: false, title: '', description: null, typeMessage: 'error' });
     const [onCloseCallback, setOnCloseCallback] = useState(null);
 
@@ -35,11 +36,34 @@ export default forwardRef(function CustomDialog({ callback = () => {} }, ref) {
     };
 
     const openDialog = (title = '', type = 'error', description = null, closeCallback = null) => {
+        setLoading(false);
         setState({ open: true, title, typeMessage: type, description });
         setOnCloseCallback(() => closeCallback);
     };
 
-    useImperativeHandle(ref, () => ({ closeDialog, openDialog }));
+    const openLoading = () => {
+        setState({ open: false, title: '', description: null, typeMessage: 'error' });
+        setLoading(true);
+    };
+
+    const closeLoading = () => setLoading(false);
+
+    useImperativeHandle(ref, () => ({ closeDialog, openDialog, openLoading, closeLoading }));
+
+    if (loading) return (
+        <div className="fixed inset-0 z-1000 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="w-[90%] max-w-sm bg-[#151b28] rounded-2xl overflow-hidden shadow-2xl border border-slate-700/40 flex flex-col items-center gap-6 px-8 py-10">
+                <div className="relative w-16 h-16">
+                    <div className="absolute inset-0 rounded-full border-4 border-slate-700/50" />
+                    <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-emerald-400 animate-spin" />
+                </div>
+                <div className="flex flex-col items-center gap-2 text-center">
+                    <p className="text-slate-100 text-base font-semibold">Procesando solicitud</p>
+                    <p className="text-slate-400 text-sm">Esperando respuesta del servidor...</p>
+                </div>
+            </div>
+        </div>
+    );
 
     if (!state.open) return null;
 
@@ -47,7 +71,7 @@ export default forwardRef(function CustomDialog({ callback = () => {} }, ref) {
 
     return (
         <div
-            className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-1000 flex items-center justify-center bg-black/60 backdrop-blur-sm"
             onClick={closeDialog}
         >
             <div
