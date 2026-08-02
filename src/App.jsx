@@ -171,9 +171,14 @@ function App() {
                             );
                         } else {
                             setResultUserState(response.data.user);
+                            // lateInfo llega del endpoint de marcado cuando la
+                            // entrada fue con retardo: { minutesLate,
+                            // discountUnits, graceMinutes, startTime }
+                            const lateInfo = response.data.lateInfo || null;
                             dialogRef.current.openDialog(
-                                'Usuario registrado', 'success',
-                                returnUsersuccessful(response.data.message),
+                                lateInfo ? 'Registro con retardo' : 'Usuario registrado',
+                                lateInfo ? 'warning' : 'success',
+                                returnUsersuccessful(response.data.message, lateInfo),
                                 () => setDniState('')
                             );
                             sucessAudio();
@@ -229,10 +234,21 @@ function App() {
 
 
 
-    const returnUsersuccessful = (text) => (
+    const returnUsersuccessful = (text, lateInfo = null) => (
         <div className="flex flex-col items-center gap-3">
             <img className="w-16" src="/icons8-evento-96.png" alt="success" />
             <p className="text-lg text-emerald-300 text-center">{text}</p>
+            {lateInfo && (
+                <div className="w-full flex flex-col items-center gap-1 px-4 py-3 rounded-xl bg-amber-900/30 border border-amber-500/40">
+                    <p className="text-amber-300 text-base font-semibold">
+                        Retardo de {lateInfo.minutesLate} min
+                        {lateInfo.startTime ? ` (entrada ${lateInfo.startTime})` : ''}
+                    </p>
+                    <p className="text-amber-200/80 text-sm text-center">
+                        {lateInfo.discountUnits} {lateInfo.discountUnits === 1 ? 'unidad' : 'unidades'} de descuento
+                    </p>
+                </div>
+            )}
         </div>
     );
 
