@@ -44,6 +44,10 @@ function App() {
     const faceScanRef = useRef(null);
     const isProcessingRef = useRef(false);
     const isSubmittingRef = useRef(false);
+    // Mejor descriptor facial reciente del escaneo en vivo: se captura
+    // mientras la persona mira la cámara (tecleando su cédula), que es un
+    // frame MUY superior al del momento del submit (mirando el teclado).
+    const lastFaceDescriptorRef = useRef(null);
 
 
 
@@ -87,6 +91,13 @@ function App() {
 
                     if (result) {
                         setFaceDetection({ box: result.box, match: result.match });
+
+                        // Guardar solo muestras dignas para el aprendizaje:
+                        // rostro razonablemente cerca (≥15% del ancho del
+                        // cuadro) — descarta caras lejanas o de pasada.
+                        if (result.descriptor && result.box.width >= 0.15) {
+                            lastFaceDescriptorRef.current = { descriptor: result.descriptor, at: Date.now() };
+                        }
 
                         if (result.match && dniState === '') {
                             setFaceSuggestion(result.match);
@@ -183,13 +194,22 @@ function App() {
                             );
                             sucessAudio();
 
-                            // Aprendizaje facial: guardar descriptor asociado a esta cédula
+                            // Aprendizaje facial: usar el mejor descriptor del
+                            // escaneo en vivo (persona mirando la cámara al
+                            // teclear). Re-detectar en el submit era aprender
+                            // del peor frame: mirando el teclado o en negro.
                             if (isReady()) {
-                                const video = cameraRef.current?.getVideoElement();
-                                if (video) {
-                                    getDescriptor(video).then(desc => {
-                                        if (desc) saveDescriptor(dniState, desc);
-                                    });
+                                const recent = lastFaceDescriptorRef.current;
+                                if (recent && Date.now() - recent.at < 15000) {
+                                    saveDescriptor(dniState, recent.descriptor);
+                                } else {
+                                    // Sin muestra fresca: intento con el frame actual
+                                    const video = cameraRef.current?.getVideoElement();
+                                    if (video) {
+                                        getDescriptor(video).then(desc => {
+                                            if (desc) saveDescriptor(dniState, desc);
+                                        });
+                                    }
                                 }
                             }
                         }

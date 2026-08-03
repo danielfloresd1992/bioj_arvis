@@ -163,12 +163,55 @@ export default forwardRef(function CameraBox({ isActive = false, faceDetection =
 
 
 
+    // Espera a que el <video> tenga un frame REAL decodificado. getUserMedia
+    // resuelve ANTES de que llegue el primer frame (videoWidth = 0,
+    // readyState < 2): dibujar en ese hueco era la causa de la foto negra.
+    const waitForVideoFrame = (video, timeoutMs = 4000) => new Promise(resolve => {
+        const started = Date.now();
+        const check = () => {
+            if (video.readyState >= 2 && video.videoWidth > 0) return resolve(true);
+            if (Date.now() - started > timeoutMs) return resolve(false);
+            requestAnimationFrame(check);
+        };
+        check();
+    });
+
+    // Luminancia promedio (0-255) del canvas: una foto legítima nunca es ~0.
+    const averageLuminance = (context, width, height) => {
+        const pixels = context.getImageData(0, 0, width, height).data;
+        let sum = 0;
+        for (let i = 0; i < pixels.length; i += 4) {
+            sum += (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3;
+        }
+        return sum / (pixels.length / 4);
+    };
+
+    // Dibuja el frame actual usando el tamaño REAL del stream (el 640x480
+    // fijo de antes achataba la foto cuando la cámara entrega 1280x720).
+    const captureFrame = () => {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        return context;
+    };
+
     const getImageFileAnd64 = async (callback) => {
         if (!streamRef.current) await startCamera();
         const video = videoRef.current;
         const canvas = canvasRef.current;
-        const context = canvas.getContext('2d');
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        await waitForVideoFrame(video);
+        let context = captureFrame();
+
+        // Red final anti-foto-negra: si el promedio es casi cero, el frame
+        // aún no estaba pintado — un reintento captura el siguiente.
+        if (averageLuminance(context, canvas.width, canvas.height) < 6) {
+            await new Promise(resolve => setTimeout(resolve, 350));
+            context = captureFrame();
+        }
 
         canvas.toBlob((blob) => {
             const file = new File([blob], 'foto.jpg', { type: 'image/jpeg' });
